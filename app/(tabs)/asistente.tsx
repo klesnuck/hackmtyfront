@@ -61,6 +61,7 @@ export default function AsistenteScreen() {
   const textInputRef = useRef<TextInput>(null);
   const focusDraftOnActive = useRef(false);
   const hasSentInitialIntent = useRef(false);
+  const isPressingMicRef = useRef(false);
 
   const baseUrl = (Constants.expoConfig?.extra?.apiBaseUrl as string | undefined) ?? '';
   const hasIntentPrompt = Boolean(intent && INTENT_PROMPTS[intent]);
@@ -107,7 +108,7 @@ export default function AsistenteScreen() {
   const submitAudio = async (audioB64: string) => {
     if (!sessionId || isSending) return;
     setIsSending(true);
-    appendTurn({ id: `user-${Date.now()}`, role: 'user', text: '🎤 Mensaje de voz' });
+    // Removed appendTurn for user voice messages to allow a fluid conversation UI without bubbles
 
     try {
       const response = await sendMessage({ session_id: sessionId, audio_b64: audioB64 });
@@ -203,23 +204,47 @@ export default function AsistenteScreen() {
           contentContainerStyle={styles.turnsContainer}
           ListHeaderComponent={
             <View style={styles.idleHeaderSection}>
-              <AnimatedOrb />
+              <AnimatedOrb isListening={recorder.isRecording} />
               <View style={styles.idleTextGroup}>
-                <Text style={styles.idleTitle}>¿En qué te puedo ayudar?</Text>
+                <Text style={styles.idleTitle}>
+                  {recorder.isRecording ? 'Te escucho...' : '¿En qué te puedo ayudar?'}
+                </Text>
                 <Text style={styles.idleSubtitle}>
-                  Hola Daniela, soy tu asesor de crédito. Puedo ayudarte con tus dudas o reestructurar tus préstamos.
+                  {recorder.isRecording
+                    ? 'Habla con tranquilidad, estoy procesando tu voz...'
+                    : 'Hola Daniela, soy tu asesor de crédito. Puedo ayudarte con tus dudas o reestructurar tus préstamos.'}
                 </Text>
               </View>
 
-              {/* Botón de micrófono grande centrado */}
+              {/* Botón de micrófono grande centrado (Mantener presionado para hablar) */}
               <View style={styles.micWrapper}>
                 <RecordingPulse active={recorder.isRecording} />
                 <AnimatedPressable
                   style={[styles.bigMicButton, recorder.isRecording && styles.bigMicButtonActive]}
-                  onPress={handleMicPress}
-                  disabled={recorder.state === 'requesting-permission' || recorder.state === 'processing'}
+                  onPressIn={async () => {
+                    isPressingMicRef.current = true;
+                    if (recorder.state !== 'requesting-permission' && recorder.state !== 'processing' && !recorder.isRecording) {
+                      try {
+                        await recorder.start();
+                        // If finger was released while recorder was initializing, stop/submit immediately
+                        if (!isPressingMicRef.current) {
+                          const audioB64 = await recorder.stop();
+                          if (audioB64 && audioB64.length > 500) void submitAudio(audioB64);
+                        }
+                      } catch {
+                        appendTurn({ id: `system-${Date.now()}`, role: 'system', text: 'No se pudo acceder al micrófono.' });
+                      }
+                    }
+                  }}
+                  onPressOut={async () => {
+                    isPressingMicRef.current = false;
+                    if (recorder.isRecording) {
+                      const audioB64 = await recorder.stop();
+                      if (audioB64 && audioB64.length > 500) void submitAudio(audioB64);
+                    }
+                  }}
                 >
-                  <Ionicons name={recorder.isRecording ? 'stop' : 'mic'} size={36} color="#fff" />
+                  <Ionicons name="mic" size={36} color="#fff" />
                 </AnimatedPressable>
               </View>
 
@@ -288,11 +313,10 @@ function TurnBubble({ turn, catalogId }: { turn: Turn; catalogId: 'standard' | '
   // Agent turn: render the generated surface inline, using the SAME renderer as the Kill Test.
   return (
     <Animated.View entering={FadeInUp.duration(240)} style={[styles.bubbleRow, styles.bubbleRowAgent]}>
-      {turn.text && (
-        <View style={[styles.bubble, styles.bubbleAgent]}>
-          <Text style={styles.bubbleTextAgent}>{turn.text}</Text>
-        </View>
-      )}
+      {/* 
+        Removed the text bubble rendering here to prevent the UI from acting like a chat.
+        The UI should feel like a fluid voice conversation with just fluid AI Interfaces (surfaces).
+      */}
       {turn.surfaceId && (
         <View style={styles.surfaceWrapper}>
           <A2UISurface surfaceId={turn.surfaceId} catalogId={catalogId} />
@@ -398,25 +422,27 @@ const styles = StyleSheet.create({
   turnsContainer: {
     paddingHorizontal: spacing.xl,
     paddingBottom: spacing.xxl,
-    gap: spacing.lg,
+    gap: spacing.xl,
+    flexGrow: 1,
   },
   idleHeaderSection: {
     alignItems: 'center',
     justifyContent: 'center',
-    gap: spacing.lg,
-    paddingTop: spacing.xl,
-    paddingBottom: spacing.xl,
+    gap: spacing.xl,
+    paddingTop: 64,
+    paddingBottom: spacing.xxl,
     paddingHorizontal: spacing.xl,
+    minHeight: '75%',
   },
 
-  idleTextGroup: { alignItems: 'center', gap: spacing.sm },
+  idleTextGroup: { alignItems: 'center', gap: spacing.md, marginVertical: spacing.md },
   idleTitle: { ...typography.h2, color: colors.text.primary, textAlign: 'center' },
-  idleSubtitle: { ...typography.body, color: colors.text.secondary, textAlign: 'center', fontSize: 14 },
+  idleSubtitle: { ...typography.body, color: colors.text.secondary, textAlign: 'center', fontSize: 15, lineHeight: 22 },
 
   bigMicButton: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
+    width: 84,
+    height: 84,
+    borderRadius: 42,
     backgroundColor: colors.brand.primary,
     alignItems: 'center',
     justifyContent: 'center',
@@ -425,25 +451,28 @@ const styles = StyleSheet.create({
     shadowRadius: 16,
     shadowOffset: { width: 0, height: 6 },
     elevation: 6,
-    marginVertical: spacing.sm,
+    marginVertical: spacing.md,
   },
   bigMicButtonActive: {
-    backgroundColor: colors.text.danger,
-    shadowColor: colors.text.danger,
+    backgroundColor: '#FF007F',
+    shadowColor: '#00F2FE',
+    shadowOpacity: 0.8,
+    shadowRadius: 24,
   },
 
   idleInputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     width: '100%',
-    maxWidth: 340,
-    height: 50,
+    maxWidth: 360,
+    height: 52,
     borderRadius: radius.pill,
     backgroundColor: colors.surface.card,
     borderWidth: 1,
     borderColor: colors.border.subtle,
     paddingLeft: spacing.lg,
     paddingRight: spacing.xs,
+    marginTop: spacing.md,
   },
   idleTextInput: {
     flex: 1,

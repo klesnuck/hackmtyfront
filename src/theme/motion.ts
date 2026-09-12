@@ -37,5 +37,6 @@ export const pressScale = {
   to: 0.96,
 } as const;
 
-/** Duration for one cycle of the voice-recording pulse (features/voice). */
-export const recordingPulseDurationMs = 900;
+/** Duration for one cycle of the voice-recording pulse (features/voice). Ralentizado for a smooth Siri-style pulse. */
+export const recordingPulseDurationMs = 2400;
+

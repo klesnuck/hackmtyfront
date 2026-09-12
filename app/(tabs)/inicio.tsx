@@ -69,7 +69,7 @@ export default function InicioScreen() {
   const quickActions: QuickAction[] = [
     {
       key: 'ahorros',
-      label: 'Ahorros',
+      label: 'Apartados',
       icon: 'save-outline',
       tint: accent.savingsTeal,
       onPress: () => router.push('/apartados'),
