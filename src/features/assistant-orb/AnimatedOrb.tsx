@@ -1,7 +1,7 @@
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useEffect } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { StyleSheet } from 'react-native';
 import Animated, {
   Easing,
   cancelAnimation,
@@ -11,74 +11,119 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 
-const OUTER_SIZE = 180;
-const INNER_SIZE = 140;
-
-// Local to this component: Figma's orb (37:142/37:143) is a one-off
-// purple/blue gradient with no equivalent in theme/tokens.ts's brand
-// palette, and tokens.ts is owned by other lanes in this parallel build —
-// not a general-purpose color worth adding there.
-const OUTER_GLOW_COLOR = 'rgba(88,86,214,0.22)';
-const GRADIENT_COLORS = ['#33489E', '#5856D6', '#8B6BF2', '#5856D6'] as const;
+const ORB_SIZE = 160;
 
 /**
- * The idle screen's "alive" orb (Figma node 37:123's orb-outer-glow /
- * orb-inner-glow). Hand-built on expo-linear-gradient + expo-blur +
- * reanimated per design.md's decision against react-native-magic-orb /
- * Skia (immaturity + new native dependency risk not worth it for a
- * hackathon build). A blurred outer glow sits behind a crisp, slowly
- * rotating gradient core; a breathing scale layers on top for the
- * "thinking/listening" feel. Mount/unmount this component with the idle
- * view — animations are cancelled on unmount so nothing runs off-screen.
+ * Clean, minimal fluid sphere with a subtle, gentle breathing animation.
+ * Free of inner spots or hard overlapping circles.
  */
-export function AnimatedOrb() {
+export function AnimatedOrb({ isListening = false }: { isListening?: boolean }) {
   const breath = useSharedValue(0);
-  const rotation = useSharedValue(0);
+  const slowRotate = useSharedValue(0);
 
   useEffect(() => {
-    breath.value = withRepeat(withTiming(1, { duration: 2200, easing: Easing.inOut(Easing.sin) }), -1, true);
-    rotation.value = withRepeat(withTiming(1, { duration: 9000, easing: Easing.linear }), -1, false);
+    // Gentle breathing cycle (3 seconds smooth sinusoid)
+    breath.value = withRepeat(
+      withTiming(1, { duration: 3000, easing: Easing.inOut(Easing.sin) }),
+      -1,
+      true,
+    );
+
+    // Continuous slow background rotation for dynamic gradient movement
+    slowRotate.value = withRepeat(
+      withTiming(1, { duration: 24000, easing: Easing.linear }),
+      -1,
+      false,
+    );
 
     return () => {
       cancelAnimation(breath);
-      cancelAnimation(rotation);
+      cancelAnimation(slowRotate);
     };
-  }, [breath, rotation]);
+  }, [breath, slowRotate, isListening]);
 
-  const coreStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: 0.92 + breath.value * 0.12 }, { rotate: `${rotation.value * 360}deg` }],
-  }));
+  // Subtle, gentle scale breathing (0.98 to 1.02 when idle, up to 1.04 when speaking)
+  const containerAnimatedStyle = useAnimatedStyle(() => {
+    const maxScaleAdd = isListening ? 0.04 : 0.02;
+    const scale = 0.98 + breath.value * maxScaleAdd;
+
+    return {
+      transform: [{ scale }],
+    };
+  });
+
+  // Soft rotation of the gradient
+  const orbGradientStyle = useAnimatedStyle(() => {
+    return {
+      transform: [{ rotate: `${slowRotate.value * 360}deg` }],
+    };
+  });
+
+  // Subtle outer aura glow opacity breathing
+  const auraGlowStyle = useAnimatedStyle(() => {
+    const opacity = isListening ? 0.65 + breath.value * 0.15 : 0.4 + breath.value * 0.1;
+    const scale = 1.06 + breath.value * 0.03;
+
+    return {
+      opacity,
+      transform: [{ scale }],
+    };
+  });
 
   return (
-    <View style={styles.outer} pointerEvents="none">
-      <BlurView intensity={35} tint="light" style={StyleSheet.absoluteFill} />
-      <Animated.View style={[styles.core, coreStyle]}>
+    <Animated.View style={[styles.container, containerAnimatedStyle]} pointerEvents="none">
+      {/* Soft outer glow aura layer (turquoise) */}
+      <Animated.View style={[styles.auraGlow, auraGlowStyle]}>
         <LinearGradient
-          colors={GRADIENT_COLORS}
-          start={{ x: 0.12, y: 0.1 }}
-          end={{ x: 0.9, y: 0.95 }}
-          style={styles.gradient}
+          colors={['#00F2FE', '#00D2FF', '#00C6FF']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.fullGradient}
         />
+        <BlurView intensity={35} tint="dark" style={StyleSheet.absoluteFill} />
       </Animated.View>
-    </View>
+
+      {/* Clean single fluid orb core (turquoise) */}
+      <Animated.View style={styles.orbCore}>
+        <Animated.View style={[styles.fullGradient, orbGradientStyle]}>
+          <LinearGradient
+            colors={['#E0FFFF', '#00F2FE', '#4FACFE', '#0B2545']}
+            start={{ x: 0.1, y: 0.1 }}
+            end={{ x: 0.9, y: 0.9 }}
+            style={styles.fullGradient}
+          />
+        </Animated.View>
+      </Animated.View>
+    </Animated.View>
   );
 }
 
 const styles = StyleSheet.create({
-  outer: {
-    width: OUTER_SIZE,
-    height: OUTER_SIZE,
-    borderRadius: OUTER_SIZE / 2,
-    backgroundColor: OUTER_GLOW_COLOR,
+  container: {
+    width: ORB_SIZE,
+    height: ORB_SIZE,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  auraGlow: {
+    ...StyleSheet.absoluteFill,
+    borderRadius: ORB_SIZE / 2,
     overflow: 'hidden',
   },
-  core: {
-    width: INNER_SIZE,
-    height: INNER_SIZE,
-    borderRadius: INNER_SIZE / 2,
+  orbCore: {
+    width: ORB_SIZE * 0.88,
+    height: ORB_SIZE * 0.88,
+    borderRadius: (ORB_SIZE * 0.88) / 2,
     overflow: 'hidden',
+    shadowColor: '#00F2FE',
+    shadowOpacity: 0.5,
+    shadowRadius: 20,
+    elevation: 8,
   },
-  gradient: { width: '100%', height: '100%' },
+  fullGradient: {
+    width: '100%',
+    height: '100%',
+  },
 });
+
+
