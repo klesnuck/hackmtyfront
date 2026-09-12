@@ -23,15 +23,23 @@ import { colors, radius, spacing, typography } from '../src/theme/tokens';
  * decorative; "Entrar de forma segura" just mints a mocked session
  * (REQ-API-01) and moves to the dashboard. Ported from the team's Figma
  * design (Banorte brand) — see CHANGELOG.md's Figma-to-code entry.
+ *
+ * TODO(add-mock-login-accounts): POST /api/session isn't deployed yet, so
+ * this matches input against src/features/session/mockAccounts.ts instead of
+ * "any input succeeds". Revert per openspec/changes/add-mock-login-accounts
+ * once the backend confirms the endpoint is live.
  */
 export default function LoginScreen() {
   const [showPassword, setShowPassword] = useState(false);
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
   const { mutate: createSession, isPending } = useCreateSession();
 
   const handleLogin = () => {
-    createSession(undefined, {
-      onSuccess: () => router.replace('/dashboard'),
-    });
+    createSession(
+      { username, password },
+      { onSuccess: () => router.replace('/dashboard') },
+    );
   };
 
   return (
@@ -67,6 +75,8 @@ export default function LoginScreen() {
               placeholder="Ingresa tu usuario"
               placeholderTextColor={colors.text.placeholder}
               autoCapitalize="none"
+              value={username}
+              onChangeText={setUsername}
             />
           </View>
 
@@ -78,6 +88,8 @@ export default function LoginScreen() {
                 placeholder="••••••••"
                 placeholderTextColor={colors.text.placeholder}
                 secureTextEntry={!showPassword}
+                value={password}
+                onChangeText={setPassword}
               />
               <Pressable
                 onPress={() => setShowPassword((v) => !v)}
@@ -101,6 +113,11 @@ export default function LoginScreen() {
               <Text style={styles.loginButtonText}>Entrar de forma segura</Text>
             )}
           </AnimatedPressable>
+
+          {/* TODO(add-mock-login-accounts): remove this hint once POST /api/session is live. */}
+          <Text style={styles.mockHint}>
+            Demo (sin backend): demo / elderly / blind / lowliteracy — contraseña demo1234
+          </Text>
         </Animated.View>
       </KeyboardAvoidingView>
     </View>
@@ -154,4 +171,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   loginButtonText: { ...typography.button, color: colors.text.onBrand },
+
+  mockHint: { ...typography.body, color: colors.text.secondary, fontSize: 12, textAlign: 'center' },
 });
