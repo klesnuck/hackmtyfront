@@ -81,7 +81,6 @@ export default function PrestamosScreen() {
     <SafeAreaView style={styles.screen} edges={['bottom']}>
       <View style={[styles.header, { paddingTop: insets.top + spacing.md }]}>
         <Text style={styles.headerTitle}>Mis Préstamos</Text>
-        <Ionicons name="notifications-outline" size={24} color={colors.text.onBrand} />
       </View>
 
       {isLoading ? (

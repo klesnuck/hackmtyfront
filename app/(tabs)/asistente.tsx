@@ -13,7 +13,7 @@ import {
   View,
 } from 'react-native';
 import Animated, { FadeInUp } from 'react-native-reanimated';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { A2UISurface, useA2UIStore } from '../../src/a2ui';
 import { sendMessage } from '../../src/api/endpoints';
 import { AnimatedPressable } from '../../src/catalog/shared/AnimatedPressable';
@@ -47,6 +47,7 @@ const INTENT_PROMPTS: Record<string, string> = {
  * entirely and fires the existing initial-intent effect below).
  */
 export default function AsistenteScreen() {
+  const insets = useSafeAreaInsets();
   const { intent } = useLocalSearchParams<{ intent?: string }>();
   const sessionId = useSessionStore((s) => s.sessionId);
   const catalogId = useActiveCatalogId();
@@ -81,10 +82,17 @@ export default function AsistenteScreen() {
 
   const appendTurn = (turn: Turn) => setTurns((prev) => [...prev, turn]);
 
-  const submitText = async (text: string) => {
+  // Voice turns skip the user bubble (`showUserBubble: false`): a transcribed
+  // "mensaje de voz" rendered back as a chat bubble read like a transcript,
+  // not a conversation. Typed turns still show one, since there's no spoken
+  // input to point back to and the idle input pill only reflects the draft
+  // while it's being typed.
+  const submitText = async (text: string, { showUserBubble = true }: { showUserBubble?: boolean } = {}) => {
     if (!sessionId || !text.trim() || isSending) return;
     setIsSending(true);
-    appendTurn({ id: `user-${Date.now()}`, role: 'user', text });
+    if (showUserBubble) {
+      appendTurn({ id: `user-${Date.now()}`, role: 'user', text });
+    }
     setDraft('');
 
     try {
@@ -105,37 +113,30 @@ export default function AsistenteScreen() {
     }
   };
 
-  const submitAudio = async (audioB64: string) => {
-    if (!sessionId || isSending) return;
-    setIsSending(true);
-    // Removed appendTurn for user voice messages to allow a fluid conversation UI without bubbles
-
+  // Push-to-talk: listening starts on press-in and stops (submitting whatever
+  // transcript was captured) on press-out, so the mic never keeps listening
+  // after the user lets go and never needs a second tap to know they're done.
+  const handleMicPressIn = async () => {
+    isPressingMicRef.current = true;
+    if (speech.state !== 'idle') return;
     try {
-      const response = await sendMessage({ session_id: sessionId, audio_b64: audioB64 });
-      applyMessages(response.a2ui);
-      appendTurn({ id: `agent-${Date.now()}`, role: 'agent', surfaceId: response.surface_id });
-      if (response.audio_ref) void playAudioAsset(response.audio_ref, baseUrl);
+      await speech.start();
+      // Finger was released while permission/start was still in flight —
+      // stop immediately instead of leaving the mic listening.
+      if (!isPressingMicRef.current) {
+        const transcript = await speech.stop();
+        if (transcript) void submitText(transcript, { showUserBubble: false });
+      }
     } catch {
-      appendTurn({
-        id: `system-${Date.now()}`,
-        role: 'system',
-        text: 'No pude conectar con el asistente. Intenta de nuevo.',
-      });
-    } finally {
-      setIsSending(false);
+      appendTurn({ id: `system-${Date.now()}`, role: 'system', text: 'No se pudo acceder al micrófono.' });
     }
   };
 
-  const handleMicPress = async () => {
+  const handleMicPressOut = async () => {
+    isPressingMicRef.current = false;
     if (speech.isListening) {
       const transcript = await speech.stop();
-      if (transcript) void submitText(transcript);
-      return;
-    }
-    try {
-      await speech.start();
-    } catch {
-      appendTurn({ id: `system-${Date.now()}`, role: 'system', text: 'No se pudo acceder al micrófono.' });
+      if (transcript) void submitText(transcript, { showUserBubble: false });
     }
   };
 
@@ -146,7 +147,7 @@ export default function AsistenteScreen() {
 
   const handleHablar = () => {
     setManualActive(true);
-    void handleMicPress();
+    void handleMicPressIn();
   };
 
   // Deliberate one-shot: fires the dashboard's quick-action prompt exactly
@@ -183,8 +184,8 @@ export default function AsistenteScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.screen} edges={['top', 'bottom']}>
-      <View style={styles.idleTopBar}>
+    <SafeAreaView style={styles.screen} edges={['bottom']}>
+      <View style={[styles.idleTopBar, { paddingTop: insets.top + spacing.md }]}>
         <Pressable onPress={() => router.back()} hitSlop={8}>
           <Ionicons name="chevron-back" size={24} color={colors.text.onBrand} />
         </Pressable>
@@ -195,136 +196,64 @@ export default function AsistenteScreen() {
       {/* Fixed section (tasks.md 4.1): orb, greeting, mic button, and input
           pill live outside the FlatList so they never scroll away — only
           the turns list below scrolls when the conversation overflows. */}
-      <View style={styles.idleHeaderSection}>
-        <AnimatedOrb />
-        <View style={styles.idleTextGroup}>
-          <Text style={styles.idleTitle}>¿En qué te puedo ayudar?</Text>
-          <Text style={styles.idleSubtitle}>
-            {speech.isListening
-              ? speech.partialText || 'Escuchando...'
-              : 'Hola Daniela, soy tu asesor de crédito. Puedo ayudarte con tus dudas o reestructurar tus préstamos.'}
-          </Text>
-        </View>
-
-        {/* Botón de micrófono grande centrado */}
-        <View style={styles.micWrapper}>
-          <RecordingPulse active={speech.isListening} />
-          <AnimatedPressable
-            style={[styles.bigMicButton, speech.isListening && styles.bigMicButtonActive]}
-            onPress={handleMicPress}
-            disabled={speech.state === 'requesting-permission' || speech.state === 'processing'}
-          >
-            <Ionicons name={speech.isListening ? 'stop' : 'mic'} size={36} color="#fff" />
-          </AnimatedPressable>
-        </View>
-
-        {/* Recuadro pequeño de texto abajo del micrófono */}
-        <View style={styles.idleInputContainer}>
-          <TextInput
-            ref={textInputRef}
-            style={styles.idleTextInput}
-            value={draft}
-            onChangeText={setDraft}
-            placeholder="Escribe aquí..."
-            placeholderTextColor={colors.text.placeholder}
-            editable={!speech.isListening}
-            onSubmitEditing={handleIdleSendText}
-            returnKeyType="send"
-          />
-          <Pressable onPress={handleIdleSendText} disabled={!draft.trim() || isSending} style={styles.idleSendIcon}>
-            <Ionicons
-              name="arrow-up-circle"
-              size={32}
-              color={draft.trim() && !isSending ? colors.brand.primary : colors.text.placeholder}
-            />
-          </Pressable>
-        </View>
-      </View>
-
       <KeyboardAvoidingView
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
       >
+        <View style={styles.idleHeaderSection}>
+          <AnimatedOrb isListening={speech.isListening} />
+          <View style={styles.idleTextGroup}>
+            <Text style={styles.idleTitle}>¿En qué te puedo ayudar?</Text>
+            <Text style={styles.idleSubtitle}>
+              {speech.isListening
+                ? speech.partialText || 'Escuchando...'
+                : 'Hola Daniela, soy tu asesor de crédito. Puedo ayudarte con tus dudas o reestructurar tus préstamos.'}
+            </Text>
+          </View>
+
+          {/* Botón de micrófono grande centrado (mantener presionado para hablar) */}
+          <View style={styles.micWrapper}>
+            <RecordingPulse active={speech.isListening} />
+            <AnimatedPressable
+              style={[styles.bigMicButton, speech.isListening && styles.bigMicButtonActive]}
+              onPressIn={handleMicPressIn}
+              onPressOut={handleMicPressOut}
+              disabled={speech.state === 'requesting-permission' || speech.state === 'processing'}
+            >
+              <Ionicons name={speech.isListening ? 'stop' : 'mic'} size={36} color="#fff" />
+            </AnimatedPressable>
+          </View>
+
+          {/* Recuadro pequeño de texto abajo del micrófono */}
+          <View style={styles.idleInputContainer}>
+            <TextInput
+              ref={textInputRef}
+              style={styles.idleTextInput}
+              value={draft}
+              onChangeText={setDraft}
+              placeholder="Escribe aquí..."
+              placeholderTextColor={colors.text.placeholder}
+              editable={!speech.isListening}
+              onSubmitEditing={handleIdleSendText}
+              returnKeyType="send"
+            />
+            <Pressable onPress={handleIdleSendText} disabled={!draft.trim() || isSending} style={styles.idleSendIcon}>
+              <Ionicons
+                name="arrow-up-circle"
+                size={32}
+                color={draft.trim() && !isSending ? colors.brand.primary : colors.text.placeholder}
+              />
+            </Pressable>
+          </View>
+        </View>
+
         <FlatList
           ref={listRef}
           data={turns}
           keyExtractor={(t) => t.id}
           style={styles.turnsList}
           contentContainerStyle={styles.turnsContainer}
-          ListHeaderComponent={
-            <View style={styles.idleHeaderSection}>
-              <AnimatedOrb isListening={recorder.isRecording} />
-              <View style={styles.idleTextGroup}>
-                <Text style={styles.idleTitle}>
-                  {recorder.isRecording ? 'Te escucho...' : '¿En qué te puedo ayudar?'}
-                </Text>
-                <Text style={styles.idleSubtitle}>
-                  {recorder.isRecording
-                    ? 'Habla con tranquilidad, estoy procesando tu voz...'
-                    : 'Hola Daniela, soy tu asesor de crédito. Puedo ayudarte con tus dudas o reestructurar tus préstamos.'}
-                </Text>
-              </View>
-
-              {/* Botón de micrófono grande centrado (Mantener presionado para hablar) */}
-              <View style={styles.micWrapper}>
-                <RecordingPulse active={recorder.isRecording} />
-                <AnimatedPressable
-                  style={[styles.bigMicButton, recorder.isRecording && styles.bigMicButtonActive]}
-                  onPressIn={async () => {
-                    isPressingMicRef.current = true;
-                    if (recorder.state !== 'requesting-permission' && recorder.state !== 'processing' && !recorder.isRecording) {
-                      try {
-                        await recorder.start();
-                        // If finger was released while recorder was initializing, stop/submit immediately
-                        if (!isPressingMicRef.current) {
-                          const audioB64 = await recorder.stop();
-                          if (audioB64 && audioB64.length > 500) void submitAudio(audioB64);
-                        }
-                      } catch {
-                        appendTurn({ id: `system-${Date.now()}`, role: 'system', text: 'No se pudo acceder al micrófono.' });
-                      }
-                    }
-                  }}
-                  onPressOut={async () => {
-                    isPressingMicRef.current = false;
-                    if (recorder.isRecording) {
-                      const audioB64 = await recorder.stop();
-                      if (audioB64 && audioB64.length > 500) void submitAudio(audioB64);
-                    }
-                  }}
-                >
-                  <Ionicons name="mic" size={36} color="#fff" />
-                </AnimatedPressable>
-              </View>
-
-              {/* Recuadro pequeño de texto abajo del micrófono */}
-              <View style={styles.idleInputContainer}>
-                <TextInput
-                  ref={textInputRef}
-                  style={styles.idleTextInput}
-                  value={draft}
-                  onChangeText={setDraft}
-                  placeholder="Escribe aquí..."
-                  placeholderTextColor={colors.text.placeholder}
-                  editable={!recorder.isRecording}
-                  onSubmitEditing={handleIdleSendText}
-                  returnKeyType="send"
-                />
-                <Pressable
-                  onPress={handleIdleSendText}
-                  disabled={!draft.trim() || isSending}
-                  style={styles.idleSendIcon}
-                >
-                  <Ionicons
-                    name="arrow-up-circle"
-                    size={32}
-                    color={draft.trim() && !isSending ? colors.brand.primary : colors.text.placeholder}
-                  />
-                </Pressable>
-              </View>
-            </View>
-          }
           renderItem={({ item }) => <TurnBubble turn={item} catalogId={catalogId} />}
         />
       </KeyboardAvoidingView>
@@ -409,8 +338,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    height: 56,
     paddingHorizontal: spacing.xl,
+    paddingBottom: spacing.md,
     backgroundColor: colors.brand.primary,
   },
   idleTopBarTitle: { ...typography.h3, color: colors.text.onBrand },

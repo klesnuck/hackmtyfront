@@ -13,7 +13,7 @@ import {
   View,
 } from 'react-native';
 import Animated, { FadeIn, FadeInDown, FadeInUp, FadeOut, SlideInDown, SlideOutDown } from 'react-native-reanimated';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AnimatedPressable } from '../../src/catalog/shared/AnimatedPressable';
 import { SavingsCard } from '../../src/features/savings/SavingsCard';
 import {
@@ -38,6 +38,7 @@ const VEHICLE_TYPE_LABEL: Record<SavingsVehicleType, string> = {
 };
 
 export default function ApartadosScreen() {
+  const insets = useSafeAreaInsets();
   const queryClient = useQueryClient();
   const { data: vehicles = [], isLoading } = useQuery({
     queryKey: SAVINGS_QUERY_KEY,
@@ -74,10 +75,9 @@ export default function ApartadosScreen() {
   });
 
   return (
-    <SafeAreaView style={styles.screen} edges={['top']}>
-      <View style={styles.header}>
+    <SafeAreaView style={styles.screen} edges={['bottom']}>
+      <View style={[styles.header, { paddingTop: insets.top + spacing.md }]}>
         <Text style={styles.headerTitle}>Mis apartados</Text>
-        <Ionicons name="notifications-outline" size={24} color={colors.text.onBrand} />
       </View>
 
       {successMessage && (
@@ -290,8 +290,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    height: 56,
     paddingHorizontal: spacing.xl,
+    paddingBottom: spacing.md,
     backgroundColor: colors.brand.primary,
   },
   headerTitle: { ...typography.h3, color: colors.text.onBrand },

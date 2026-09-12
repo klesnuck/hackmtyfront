@@ -126,9 +126,6 @@ export default function InicioScreen() {
             <View style={styles.avatar}>
               <Text style={styles.avatarText}>{getInitials(displayName)}</Text>
             </View>
-            <Pressable hitSlop={8}>
-              <Ionicons name="notifications-outline" size={22} color={colors.text.onBrand} />
-            </Pressable>
             <Pressable hitSlop={8} onPress={handleLogout} accessibilityLabel="Cerrar sesión">
               <Ionicons name="log-out-outline" size={22} color={colors.text.onBrand} />
             </Pressable>

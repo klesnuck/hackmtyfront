@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
-import { Modal, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { ApiError } from '../../api/client';
 import { payLiability } from '../../api/endpoints';
 import { AnimatedPressable } from '../../catalog/shared/AnimatedPressable';
@@ -30,13 +30,13 @@ type AbonoModalProps = {
 export function AbonoModal({ loan, userId, onClose }: AbonoModalProps) {
   return (
     <Modal visible={!!loan} transparent animationType="slide" onRequestClose={onClose}>
-      <View style={styles.overlay}>
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.overlay}>
         <View style={styles.sheet}>
           {/* Keyed by loan id so switching loans (or reopening) starts the form fresh
               without syncing props into state via an effect. */}
           {loan ? <AbonoSheet key={loan.id} loan={loan} userId={userId} onClose={onClose} /> : null}
         </View>
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
