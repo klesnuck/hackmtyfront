@@ -6,17 +6,14 @@
 > Scope of this document: **how the mobile app is built**, not what the product does. For product behavior, see `SPECS.md`. For the scope-change rationale (web → native mobile, Expo vs Tauri), see the `[2026-09-12] decision` entry in `CHANGELOG.md`.
 >
 > **Spanish companion:** `ARQUITECTURA_MOBILE.md` is a Spanish translation of this file with extra beginner-level explanations, aimed at junior developers on the team. It is **not authoritative** — if it ever disagrees with this file, this file wins.
+>
+> **Build state:** this document describes the design; `openspec/specs/mobile/` (baseline, deployed truth) and `openspec/changes/` (proposed, not yet built) track what is actually built vs. planned, and call out where the implementation deviated from or refined what's written here (e.g. the real A2UI wire protocol, NativeWind/Moti being dropped). Run `openspec list --specs` / `openspec list` before assuming something described below does or doesn't exist yet. See `AGENTS.md` §2a for the OpenSpec workflow.
 
 ---
 
-## 0. Starting state & cleanup
+## 0. Starting state
 
-**This repository is frontend/mobile-only.** The backend (`SPECS.md`/`AGENTS.md` §3-§4's Python/FastAPI/MCP system) lives in a separate repository and is reached only over HTTP through the frozen contract in `SPECS.md` §8. Nothing backend-related is scaffolded here — this repo *is* the Expo app, at its root, not nested under a `/mobile` folder.
-
-A root-level Vite + React web scaffold (`src/`, `index.html`, `vite.config.ts`, etc.) already exists in this repository from an earlier throwaway test (a Figma-to-code exercise, unrelated to `SPECS.md`). It is **not** the frontend described here. Before scaffolding the Expo app:
-
-1. Move it out of the repo root (e.g. into `/_scrap/web-prototype`) or delete it — it currently occupies the root path where the Expo app (`app/`, `src/`, `app.config.ts`, ...) needs to live.
-2. Keep the five root docs (`AGENTS.md`, `SPECS.md`, `INVARIANTS.md`, `CHANGELOG.md`, `MOBILE_ARCHITECTURE.md`) at repo root — that placement is deliberate and matches `AGENTS.md`'s authority chain.
+**This repository is frontend/mobile-only.** The backend (`SPECS.md`/`AGENTS.md` §3-§4's Python/FastAPI/MCP system) lives in a separate repository and is reached only over HTTP through the frozen contract in `SPECS.md` §8. This repo *is* the Expo app, at its root, not nested under a `/mobile` folder — scaffolded and committed as tracked in `openspec/specs/mobile/`. The earlier throwaway Vite/React web prototype (a Figma-to-code exercise, unrelated to `SPECS.md`) has been removed.
 
 ---
 
@@ -26,13 +23,14 @@ A root-level Vite + React web scaffold (`src/`, `index.html`, `vite.config.ts`, 
 |---|---|---|
 | Framework | **Expo (React Native) + TypeScript**, strict mode | See `CHANGELOG.md` [2026-09-12]. Windows dev machines + Apple Developer account → EAS Build (cloud) + TestFlight beats Tauri's local-macOS-only iOS build. |
 | Navigation | **Expo Router** (file-based) | Matches how the agent addresses screens by `surface_id`/domain; deep-linkable, minimal boilerplate. |
-| Styling | **NativeWind** (Tailwind syntax on RN `StyleSheet`) | A utility engine, not a component library — does not violate `INV-016`. Optional; plain `StyleSheet` + a token file is an acceptable fallback if NativeWind setup risk isn't worth it under time pressure. |
+| Styling | Plain RN `StyleSheet` + `src/theme/tokens.ts` | NativeWind was evaluated and **dropped**: at build time it had open, maintainer-acknowledged stability issues with Reanimated v4/SDK54+. Not a component library either way, so this choice doesn't affect `INV-016`. |
+| Animation | **react-native-reanimated v4** + **react-native-gesture-handler**, directly | Moti was evaluated and **dropped**: its Reanimated v4 compatibility was unconfirmed at build time. `src/theme/motion.ts` centralizes spring/timing presets so this doesn't mean ad hoc animation code. |
 | State/data | **TanStack Query** (server cache) + **Zustand** (local/session/UI state) | A2UI surfaces are server-driven documents fetched/mutated over REST — Query's cache-by-key model maps directly onto `surface_id`. Zustand covers ephemeral UI state (recording indicator, active catalog, debug overlay). No Redux — unjustified ceremony at this scope. |
 | Networking | Thin typed client over `fetch` (no axios) | One file, one retry/timeout policy, `trace_id` plumbing. A dependency here buys nothing `fetch` doesn't already give. |
 | Secure storage | `expo-secure-store` | `session_id` persistence across app restarts. Nothing else is stored (no auth tokens — `INV` explicitly excludes auth). |
-| Audio | `expo-av` (or `expo-audio` if the team is on SDK 52+) | Mic capture for STT upload, playback for TTS `audio_ref`. |
+| Audio | **`expo-audio`** (never `expo-av`) | `expo-av` is deprecated since SDK 53 and gone from Expo Go starting SDK 55; we're on SDK 57. Mic capture for STT upload, playback for TTS `audio_ref`. |
 | Build/ship | **EAS Build** (cloud) + **EAS Update** (OTA) + **TestFlight** / Play Internal Testing | No local Mac needed; instant iteration via `expo start` + Expo Go during the hackathon, polished installable build for the showcase via TestFlight (Apple Developer account already available). |
-| Catalog | 100% custom, two variants (`standard`, `voz-color`) | `INV-016`. Built on RN primitives, not a component library. |
+| Catalog | 100% custom, two variants (`standard`, `voz-color`) | `INV-016`. Built on RN primitives, not a component library. All 18 A2UI "basic" catalog node types implemented — see `openspec/specs/mobile/catalog-standard/` and `.../catalog-accessible/`. |
 
 ---
 
@@ -160,7 +158,7 @@ Rules that keep this honest (and testable against `INV-016`/`INV-017`):
 
 1. **The registry is the only place component types are known.** Feature code never pattern-matches on `node.type`; it renders `<A2UISurface />` and lets the registry resolve it. This is what makes "swap catalog for accessibility" (`REQ-ACC-02`) a one-line prop change instead of a rewrite.
 2. **Every interactive catalog component calls `actionBus.dispatch(name, sourceComponentId, context)` and nothing else.** No component owns business logic or talks to `api/client.ts` directly — that would leak `REQ-API-03`'s shape into forty files instead of one.
-3. **`actionBus` always resolves with a fresh `a2ui[]` array and replaces the surface's cached entry wholesale** (never a partial patch) — this matches `REQ-LOOP-05` ("every HTTP mutation endpoint returns a full A2UI message array") and keeps the client dumb: it never reconstructs UI state, it only ever replaces it with what the backend sent.
+3. **`actionBus` always resolves with a fresh `a2ui[]` message array and applies it via the store, never reconstructing UI state itself.** Corrected from this document's earlier draft: the real A2UI protocol (`openspec/specs/mobile/a2ui-engine/spec.md`) is a normalized, patchable component graph — `updateComponents` upserts by id and `updateDataModel` patches by JSON Pointer, both of which can be incremental, not just full replacements. `REQ-LOOP-05` ("every HTTP mutation endpoint returns a full A2UI message array") is about the *endpoint response* always containing a complete message array, not about each individual message being a full-surface replace. Either way, the client stays dumb: it never invents structure, it only ever applies exactly what the backend sent.
 4. **Unknown node types render a visible fallback, not a crash.** The backend and mobile catalog will drift during a 24h build; a graceful fallback is what keeps the golden-path demo alive when someone ships a new node type ten minutes before showtime.
 5. **`a2ui/types.ts` is transcribed from the A2UI v0.9.1 spec (`AGENTS.md` §7 doc-fetch table), not invented.** If the backend uses `a2ui-agent-sdk` to validate outgoing payloads, the mobile types should be a direct mirror — mismatch here is the single most likely source of a broken demo.
 

@@ -5,11 +5,12 @@
 >
 > It does **not** contain core architecture decisions or business requirements.
 > - Core, non-negotiable decisions → `INVARIANTS.md`
-> - Business requirements → `SPECS.md`
+> - Business requirements (backend, frozen) → `SPECS.md`
 > - Machine-readable change history → `CHANGELOG.md`
-> - Mobile frontend architecture → `MOBILE_ARCHITECTURE.md`
+> - Mobile frontend architecture (why/design narrative) → `MOBILE_ARCHITECTURE.md` (+ `ARQUITECTURA_MOBILE.md`, its Spanish companion)
+> - **Mobile frontend requirements (what, testable) → `openspec/` — see §2a. Not a root `.md` file.**
 >
-> **Authority order:** `INVARIANTS.md` > `SPECS.md` > `AGENTS.md` > `MOBILE_ARCHITECTURE.md`.
+> **Authority order:** `INVARIANTS.md` > `SPECS.md` > `AGENTS.md` > `MOBILE_ARCHITECTURE.md` > `openspec/`.
 
 ---
 
@@ -51,6 +52,25 @@ Do not build static reports, static dashboards, one-shot generated pages, predet
 
 ### Anti-fluff rule
 Never describe work as innovative, revolutionary, disruptive, personalized, intelligent, agentic, or adaptive unless the implementation provides concrete evidence. Replace adjectives with observable behavior.
+
+---
+
+## 2a. Spec-driven development via OpenSpec (mobile frontend)
+
+**This repository's mobile frontend requirements live in `openspec/`, not in a root `.md` file.** `openspec` (the CLI, `@fission-ai/openspec`) is installed globally and initialized here (`openspec/config.yaml`, schema `spec-driven`). This corrects an earlier mistake in this repo's history: a `MOBILE_SPECS.md` file was written directly at repo root instead of through OpenSpec — it has been retired and its content migrated into `openspec/specs/` and `openspec/changes/`. Do not recreate a root-level requirements `.md` file for the mobile app; propose a change instead.
+
+**The model:**
+- `openspec/specs/<capability>/spec.md` — the **current, deployed truth**. What the app actually does right now, one file per capability, `### Requirement:` + `#### Scenario:` blocks (WHEN/THEN). Treat this the way `SPECS.md` REQ-* items are treated for the backend: testable, referenced in commits.
+- `openspec/changes/<change-id>/` — a **proposed** delta before it's built: `proposal.md` (why/what), `specs/<capability>/spec.md` (delta — `## ADDED/MODIFIED/REMOVED/RENAMED Requirements`), `design.md` (how), `tasks.md` (checklist). Nothing here is deployed truth yet.
+- `openspec archive <change-id>` folds an implemented change's delta specs into `openspec/specs/` and moves the change under `openspec/changes/archive/`.
+
+**Rules of operation (mobile frontend work):**
+1. **New capability or behavior change → propose first.** Use the `openspec-propose` skill (or `/opsx:propose`) to generate `proposal.md` + delta `specs/` + `design.md` + `tasks.md` before writing implementation code. Planning and implementation are separate steps — do not skip straight to code for anything beyond a trivial fix.
+2. **Implementing an approved change → use `openspec-apply-change`** (or `/opsx:apply`), which works through `tasks.md`.
+3. **Finishing a change → use `openspec-archive-change`** (or `/opsx:archive`), which folds the delta into `openspec/specs/` (deployed truth) and archives the change. Do not hand-edit `openspec/specs/` outside of archive/sync — use `openspec-sync-specs` if main specs need updating without a full archive.
+4. **Capability naming:** kebab-case paths under `specs/`, e.g. `mobile/a2ui-engine`, `mobile/catalog-standard`, `mobile/loans-list`. Reuse an existing capability's exact path when modifying it; only invent a new path for something genuinely new.
+5. **`openspec validate` before considering any change/spec work done.**
+6. This section governs the **mobile frontend only** (this repository). The backend repository may have its own spec-driven setup — do not assume this section applies there.
 
 ---
 
