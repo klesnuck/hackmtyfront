@@ -19,6 +19,9 @@ const config: ExpoConfig = {
   ios: {
     supportsTablet: false,
     bundleIdentifier: 'mx.hackmty.lamesa',
+    infoPlist: {
+      ITSAppUsesNonExemptEncryption: false,
+    },
   },
   android: {
     package: 'mx.hackmty.lamesa',
@@ -45,12 +48,22 @@ const config: ExpoConfig = {
     'expo-status-bar',
     'expo-video',
     '@react-native-community/datetimepicker',
+    [
+      'expo-speech-recognition',
+      {
+        microphonePermission: 'Permite que La Mesa use el micrófono para escuchar tus mensajes de voz.',
+        speechRecognitionPermission: 'Permite que La Mesa transcriba tu voz a texto para el asistente.',
+      },
+    ],
   ],
   experiments: {
     typedRoutes: true,
   },
   extra: {
     apiBaseUrl: API_BASE_URL,
+    eas: {
+      projectId: 'cce298a8-95e8-404c-be32-a4caea586beb',
+    },
   },
 };
 

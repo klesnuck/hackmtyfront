@@ -1,35 +1,63 @@
+import { useQuery } from '@tanstack/react-query';
 import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, StyleSheet, Text, TextInput, View } from 'react-native';
 import Animated, { FadeInUp } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { getAccounts } from '../../src/api/endpoints';
 import { AnimatedPressable } from '../../src/catalog/shared/AnimatedPressable';
 import { TransferHeader } from '../../src/features/transfers/components/TransferHeader';
 import { formatCurrency } from '../../src/features/transfers/format';
 import { useTransferStore } from '../../src/features/transfers/transfer.store';
+import { useSessionStore } from '../../src/state/session.store';
 import { colors, radius, spacing, typography } from '../../src/theme/tokens';
 
 /**
- * Step 2 of the transfer flow: amount entry, validated against the source
- * account's available balance (spec's "Amount entry validates against
- * available balance" requirement). Guarded against being opened with no
+ * Step 2 of the transfer flow: amount + motivo entry, validated against the
+ * real selected origin account's current available balance (spec's "Amount
+ * and motivo entry validates against available balance" requirement) — no
+ * more hardcoded `sourceBalance`. Guarded against being opened with no
  * destination chosen yet (deep link / stale state).
  */
 export default function MontoScreen() {
+  const userId = useSessionStore((s) => s.userId);
+  const sourceAccountId = useTransferStore((s) => s.sourceAccountId);
   const destination = useTransferStore((s) => s.destination);
-  const sourceBalance = useTransferStore((s) => s.sourceBalance);
   const setAmount = useTransferStore((s) => s.setAmount);
+  const setMotivo = useTransferStore((s) => s.setMotivo);
 
   const [amountText, setAmountText] = useState('');
+  const [motivoText, setMotivoText] = useState('');
+
+  const { data: accountsData, isLoading } = useQuery({
+    queryKey: ['accounts', userId],
+    queryFn: () => getAccounts(userId as string),
+    enabled: !!userId,
+  });
 
   useEffect(() => {
-    if (!destination) router.replace('/transferir');
-  }, [destination]);
+    if (!destination || !sourceAccountId) router.replace('/transferir');
+  }, [destination, sourceAccountId]);
 
-  if (!destination) return null;
+  if (!destination || !sourceAccountId) return null;
+
+  if (isLoading) {
+    return (
+      <SafeAreaView style={styles.screen} edges={['top', 'bottom']}>
+        <TransferHeader title="Monto" />
+        <View style={styles.loading}>
+          <ActivityIndicator color={colors.brand.primary} />
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  const sourceAccount = accountsData?.accounts.find((a) => a.id === sourceAccountId);
+  const sourceBalance = sourceAccount?.balance ?? 0;
 
   const parsedAmount = Number(amountText.replace(',', '.'));
   const hasAmount = amountText.trim().length > 0 && !Number.isNaN(parsedAmount);
+  const hasMotivo = motivoText.trim().length > 0;
 
   let errorMessage: string | null = null;
   if (amountText.trim().length === 0) {
@@ -40,11 +68,12 @@ export default function MontoScreen() {
     errorMessage = 'El monto excede tu saldo disponible.';
   }
 
-  const canContinue = hasAmount && parsedAmount > 0 && parsedAmount <= sourceBalance;
+  const canContinue = hasAmount && parsedAmount > 0 && parsedAmount <= sourceBalance && hasMotivo;
 
   const handleContinue = () => {
     if (!canContinue) return;
     setAmount(parsedAmount);
+    setMotivo(motivoText.trim());
     router.push('/transferir/confirmar');
   };
 
@@ -74,6 +103,17 @@ export default function MontoScreen() {
           {errorMessage && <Text style={styles.errorText}>{errorMessage}</Text>}
         </Animated.View>
 
+        <Animated.View entering={FadeInUp.duration(260).delay(100)} style={styles.field}>
+          <Text style={styles.fieldLabel}>Motivo</Text>
+          <TextInput
+            style={styles.input}
+            value={motivoText}
+            onChangeText={setMotivoText}
+            placeholder="Ej. Renta de septiembre"
+            placeholderTextColor={colors.text.placeholder}
+          />
+        </Animated.View>
+
         <AnimatedPressable
           style={[styles.continueButton, !canContinue && styles.continueButtonDisabled]}
           onPress={handleContinue}
@@ -89,6 +129,8 @@ export default function MontoScreen() {
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.surface.app },
 
+  loading: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+
   content: { flex: 1, padding: spacing.xl, gap: spacing.xxl },
 
   balanceBlock: {
@@ -102,7 +144,7 @@ const styles = StyleSheet.create({
   balanceLabel: { ...typography.label, color: colors.text.secondary },
   balanceValue: { ...typography.h3, color: colors.text.primary },
 
-  amountBlock: { alignItems: 'center', gap: spacing.md, paddingVertical: spacing.xxl },
+  amountBlock: { alignItems: 'center', gap: spacing.md, paddingVertical: spacing.xl },
   amountRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   currencySign: { ...typography.h1, color: colors.text.secondary },
   amountInput: {
@@ -112,6 +154,19 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   errorText: { ...typography.caption, color: colors.text.danger, textAlign: 'center' },
+
+  field: { gap: spacing.sm },
+  fieldLabel: { ...typography.label, color: colors.text.secondary },
+  input: {
+    height: 48,
+    paddingHorizontal: spacing.lg,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.border.subtle,
+    backgroundColor: colors.surface.field,
+    color: colors.text.primary,
+    fontSize: typography.body.fontSize,
+  },
 
   continueButton: {
     marginTop: 'auto',

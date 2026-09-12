@@ -1,15 +1,27 @@
 import { apiRequest } from './client';
 import type {
+  AccountsResponse,
   ActionRequest,
   ActionResponse,
   CreateSavingBagRequest,
   KillTestResponse,
+  LiabilitiesResponse,
+  LoginRequest,
+  LoginResponse,
   MessageRequest,
   NegotiationTurnRequest,
   NegotiationTurnResponse,
+  PaymentRequest,
+  PaymentResponse,
+  ProfileResponse,
+  RecipientCreateRequest,
+  RecipientResponse,
+  RecipientsResponse,
   SavingBagResponse,
   SessionResponse,
   SurfaceResponse,
+  TransferRequest,
+  TransferResponse,
   UiResponse,
 } from './types';
 
@@ -20,8 +32,13 @@ import type {
  */
 
 // REQ-API-01
-export function createSession(): Promise<SessionResponse> {
-  return apiRequest<SessionResponse>('/api/session', { method: 'POST', body: {} });
+export function createSession(userId: string): Promise<SessionResponse> {
+  return apiRequest<SessionResponse>('/api/session', { method: 'POST', body: { user_id: userId } });
+}
+
+/** Real credential check — POST /api/login (amitie/backend/api/routers/auth.py, SPECS.md §12). */
+export function login(request: LoginRequest): Promise<LoginResponse> {
+  return apiRequest<LoginResponse>('/api/login', { method: 'POST', body: request });
 }
 
 // REQ-API-02
@@ -89,4 +106,39 @@ export function negotiationTakeControl(session: string): Promise<NegotiationTurn
     method: 'POST',
     body: {},
   });
+}
+
+// --- Plain-REST finance endpoints (amitie/backend/api/routers/finance.py) ---
+
+export function getProfile(userId: string): Promise<ProfileResponse> {
+  return apiRequest<ProfileResponse>(`/api/profile?user_id=${encodeURIComponent(userId)}`);
+}
+
+export function getAccounts(userId: string): Promise<AccountsResponse> {
+  return apiRequest<AccountsResponse>(`/api/accounts?user_id=${encodeURIComponent(userId)}`);
+}
+
+export function getLiabilities(userId: string): Promise<LiabilitiesResponse> {
+  return apiRequest<LiabilitiesResponse>(`/api/liabilities?user_id=${encodeURIComponent(userId)}`);
+}
+
+/** "Abonar" — applies a real payment against a liability (moves account balance, records a transaction). */
+export function payLiability(liabilityId: string, request: PaymentRequest): Promise<PaymentResponse> {
+  return apiRequest<PaymentResponse>(`/api/liabilities/${encodeURIComponent(liabilityId)}/payment`, {
+    method: 'POST',
+    body: request,
+  });
+}
+
+export function getRecipients(userId: string): Promise<RecipientsResponse> {
+  return apiRequest<RecipientsResponse>(`/api/recipients?user_id=${encodeURIComponent(userId)}`);
+}
+
+export function createRecipient(request: RecipientCreateRequest): Promise<RecipientResponse> {
+  return apiRequest<RecipientResponse>('/api/recipients', { method: 'POST', body: request });
+}
+
+/** Real transfer submission — moves persisted money out of the source account (`POST /api/transfers`). */
+export function submitTransfer(request: TransferRequest): Promise<TransferResponse> {
+  return apiRequest<TransferResponse>('/api/transfers', { method: 'POST', body: request });
 }

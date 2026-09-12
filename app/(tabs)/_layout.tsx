@@ -53,7 +53,7 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="asistente"
         options={{
-          title: 'Soporte IA',
+          title: 'Asistente',
           tabBarIcon: ({ color, focused }) => (
             <Ionicons name={(focused ? 'sparkles' : 'sparkles-outline') as TabIconName} size={24} color={color} />
           ),

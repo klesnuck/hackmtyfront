@@ -1,6 +1,6 @@
-import { StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { colors, radius, spacing, typography } from '../../theme/tokens';
-import type { Loan } from './mockLoans';
+import type { Loan } from './loans';
 
 const currencyFormatter = new Intl.NumberFormat('es-MX', {
   style: 'currency',
@@ -9,15 +9,12 @@ const currencyFormatter = new Intl.NumberFormat('es-MX', {
 });
 
 /**
- * Matches Figma node 37:160's loan card exactly: status dot + name, status
- * label, balance/payment row, progress bar, divider, next payment date and
- * "Pagar ahora". The latter is deliberately plain text, not a Pressable —
- * `design.md` marks the payment flow as needing a confirmed backend
- * simulation shape before it can do anything (tasks.md §4), so this pass
- * shows it without wiring an action, rather than a button that looks live
- * but silently does nothing.
+ * Matches Figma node 37:160's loan card: status dot + name, status label,
+ * balance/payment row, progress bar, divider, next payment date and
+ * "Abonar" — wired to POST /api/liabilities/{id}/payment via the parent
+ * screen's AbonoModal (src/features/loans/AbonoModal.tsx).
  */
-export function LoanCard({ loan }: { loan: Loan }) {
+export function LoanCard({ loan, onAbonar }: { loan: Loan; onAbonar: (loan: Loan) => void }) {
   const isOverdue = loan.status === 'overdue';
   const dotColor = isOverdue ? colors.text.danger : colors.brand.primary;
   const statusLabel = isOverdue ? (loan.overdueLabel ?? 'Atrasado') : 'Al corriente';
@@ -61,7 +58,9 @@ export function LoanCard({ loan }: { loan: Loan }) {
 
       <View style={styles.row}>
         <Text style={styles.nextPaymentLabel}>Siguiente pago: {loan.nextPaymentDate}</Text>
-        <Text style={styles.payNowLabel}>Pagar ahora</Text>
+        <Pressable onPress={() => onAbonar(loan)} hitSlop={8}>
+          <Text style={styles.payNowLabel}>Abonar</Text>
+        </Pressable>
       </View>
     </View>
   );

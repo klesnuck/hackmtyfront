@@ -14,33 +14,35 @@ import {
 } from 'react-native';
 import Animated, { FadeInUp } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { ApiError } from '../src/api/client';
 import { AnimatedPressable } from '../src/catalog/shared/AnimatedPressable';
-import { useCreateSession } from '../src/features/session/useCreateSession';
+import { useLogin } from '../src/features/session/useLogin';
 import { colors, radius, spacing, typography } from '../src/theme/tokens';
 
 /**
- * Visual gate, not an auth screen (SPECS.md §12 — no auth system). Fields are
- * decorative; "Entrar de forma segura" just mints a mocked session
- * (REQ-API-01) and moves to the dashboard. Ported from the team's Figma
+ * Real login (SPECS.md §12, amitie/backend `POST /api/login`): username +
+ * password are checked against a real password hash for one of the two
+ * seeded personas (`demo`/`u_ana`, `accesible`/`u_don`). Not a general auth
+ * system — no signup/registration/password-reset — but credentials are
+ * genuinely verified, not just a visual gate. Ported from the team's Figma
  * design (Banorte brand) — see CHANGELOG.md's Figma-to-code entry.
- *
- * TODO(add-mock-login-accounts): POST /api/session isn't deployed yet, so
- * this matches input against src/features/session/mockAccounts.ts instead of
- * "any input succeeds". Revert per openspec/changes/add-mock-login-accounts
- * once the backend confirms the endpoint is live.
  */
 export default function LoginScreen() {
   const [showPassword, setShowPassword] = useState(false);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
-  const { mutate: createSession, isPending } = useCreateSession();
+  const { mutate: login, isPending, error } = useLogin();
 
   const handleLogin = () => {
-    createSession(
-      { username, password },
-      { onSuccess: () => router.replace('/inicio') },
-    );
+    login({ username, password }, { onSuccess: () => router.replace('/inicio') });
   };
+
+  const errorMessage =
+    error instanceof ApiError && error.status === 401
+      ? 'Usuario o contraseña incorrectos.'
+      : error
+        ? 'Error en Servidor'
+        : null;
 
   return (
     <View style={styles.screen}>
@@ -102,9 +104,9 @@ export default function LoginScreen() {
             </View>
           </View>
 
-          <Pressable style={styles.forgotPassword}>
+          {/* <Pressable style={styles.forgotPassword}>
             <Text style={styles.forgotPasswordText}>¿Olvidé mi contraseña?</Text>
-          </Pressable>
+          </Pressable> */}
 
           <AnimatedPressable style={styles.loginButton} onPress={handleLogin} disabled={isPending}>
             {isPending ? (
@@ -114,10 +116,9 @@ export default function LoginScreen() {
             )}
           </AnimatedPressable>
 
-          {/* TODO(add-mock-login-accounts): remove this hint once POST /api/session is live. */}
-          <Text style={styles.mockHint}>
-            Demo (sin backend): demo / elderly / blind / lowliteracy — contraseña demo1234
-          </Text>
+          {errorMessage ? <Text style={styles.errorText}>{errorMessage}</Text> : null}
+
+          {/* <Text style={styles.mockHint}>Demo: demo / accesible — contraseña demo1234</Text> */}
         </Animated.View>
       </KeyboardAvoidingView>
     </View>
@@ -173,4 +174,5 @@ const styles = StyleSheet.create({
   loginButtonText: { ...typography.button, color: colors.text.onBrand },
 
   mockHint: { ...typography.body, color: colors.text.secondary, fontSize: 12, textAlign: 'center' },
+  errorText: { ...typography.body, color: colors.text.danger, fontSize: 13, textAlign: 'center' },
 });

@@ -4,52 +4,69 @@ import type { CatalogId } from '../a2ui/registry';
 import type { SessionResponse } from '../api/types';
 
 const SESSION_ID_KEY = 'la-mesa.session_id';
-
-type AccessibilityProfile = NonNullable<SessionResponse['accessibility_profile']>;
+const USER_ID_KEY = 'la-mesa.user_id';
+const ACCESSIBILITY_MODE_KEY = 'la-mesa.accessibility_mode';
 
 type SessionStore = {
   sessionId: string | null;
-  accessibilityProfile: AccessibilityProfile | null;
-  /** Has the persisted session_id been checked yet? Gates the initial route decision (app/index.tsx). */
+  userId: string | null;
+  /** Real value of `accessibility_profiles.mode` from the backend (e.g. 'low_literacy'), or null — REQ-ACC-01. */
+  accessibilityMode: string | null;
+  /** Has the persisted session been checked yet? Gates the initial route decision (app/index.tsx). */
   hasHydrated: boolean;
 
   hydrateFromStorage: () => Promise<void>;
-  setSession: (session: SessionResponse) => Promise<void>;
+  setSession: (session: SessionResponse, accessibilityMode: string | null) => Promise<void>;
   clearSession: () => Promise<void>;
 };
 
 /**
- * REQ-ACC-01: any account flag (elderly/blind/low_literacy/other) means the
+ * REQ-ACC-01/02: any non-null accessibility mode on the account means the
  * accessible catalog + full-duplex voice UX activate automatically — this is
- * not a user-facing toggle anywhere in the app.
+ * not a user-facing toggle anywhere in the app. The mode itself comes from
+ * the backend (GET /api/profile -> accessibility_profiles.mode), not a
+ * client-side guess.
  */
-export function accessibilityProfileToCatalogId(profile: AccessibilityProfile | null): CatalogId {
-  if (!profile) return 'standard';
-  const isFlagged = profile.elderly || profile.blind || profile.low_literacy || profile.other;
-  return isFlagged ? 'voz-color' : 'standard';
+export function accessibilityModeToCatalogId(mode: string | null): CatalogId {
+  return mode ? 'voz-color' : 'standard';
 }
 
 export const useSessionStore = create<SessionStore>((set) => ({
   sessionId: null,
-  accessibilityProfile: null,
+  userId: null,
+  accessibilityMode: null,
   hasHydrated: false,
 
   hydrateFromStorage: async () => {
-    const sessionId = await SecureStore.getItemAsync(SESSION_ID_KEY).catch(() => null);
-    set({ sessionId, hasHydrated: true });
+    const [sessionId, userId, accessibilityMode] = await Promise.all([
+      SecureStore.getItemAsync(SESSION_ID_KEY).catch(() => null),
+      SecureStore.getItemAsync(USER_ID_KEY).catch(() => null),
+      SecureStore.getItemAsync(ACCESSIBILITY_MODE_KEY).catch(() => null),
+    ]);
+    set({ sessionId, userId, accessibilityMode, hasHydrated: true });
   },
 
-  setSession: async (session) => {
-    await SecureStore.setItemAsync(SESSION_ID_KEY, session.session_id);
-    set({ sessionId: session.session_id, accessibilityProfile: session.accessibility_profile ?? null });
+  setSession: async (session, accessibilityMode) => {
+    await Promise.all([
+      SecureStore.setItemAsync(SESSION_ID_KEY, session.session_id),
+      SecureStore.setItemAsync(USER_ID_KEY, session.user_id),
+      accessibilityMode
+        ? SecureStore.setItemAsync(ACCESSIBILITY_MODE_KEY, accessibilityMode)
+        : SecureStore.deleteItemAsync(ACCESSIBILITY_MODE_KEY).catch(() => undefined),
+    ]);
+    set({ sessionId: session.session_id, userId: session.user_id, accessibilityMode });
   },
 
   clearSession: async () => {
-    await SecureStore.deleteItemAsync(SESSION_ID_KEY).catch(() => undefined);
-    set({ sessionId: null, accessibilityProfile: null });
+    await Promise.all([
+      SecureStore.deleteItemAsync(SESSION_ID_KEY).catch(() => undefined),
+      SecureStore.deleteItemAsync(USER_ID_KEY).catch(() => undefined),
+      SecureStore.deleteItemAsync(ACCESSIBILITY_MODE_KEY).catch(() => undefined),
+    ]);
+    set({ sessionId: null, userId: null, accessibilityMode: null });
   },
 }));
 
 export function useActiveCatalogId(): CatalogId {
-  return useSessionStore((s) => accessibilityProfileToCatalogId(s.accessibilityProfile));
+  return useSessionStore((s) => accessibilityModeToCatalogId(s.accessibilityMode));
 }

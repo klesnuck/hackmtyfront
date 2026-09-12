@@ -1,12 +1,15 @@
 import { Ionicons } from '@expo/vector-icons';
+import { useQuery } from '@tanstack/react-query';
 import * as Clipboard from 'expo-clipboard';
 import { router } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { getAccounts, getProfile } from '../../src/api/endpoints';
 import { AnimatedPressable } from '../../src/catalog/shared/AnimatedPressable';
-import { formatBalance, MOCK_ACCOUNT } from '../../src/features/dashboard/mockAccount';
+import { formatAccountKind, formatBalance } from '../../src/features/dashboard/format';
+import { useSessionStore } from '../../src/state/session.store';
 import { colors, radius, spacing, typography } from '../../src/theme/tokens';
 
 // Figma (node 37:42) uses two accent colors that aren't in theme/tokens.ts
@@ -26,14 +29,6 @@ type QuickAction = {
   onPress: () => void;
 };
 
-// Mocked pending a real session display name — SessionResponse (src/api/types.ts)
-// only carries session_id + accessibility_profile, no user name.
-const MOCK_DISPLAY_NAME: string | undefined = 'Daniela Ramírez';
-
-function getDisplayName(): string {
-  return MOCK_DISPLAY_NAME ?? 'Usuario';
-}
-
 function getInitials(name: string): string {
   const parts = name.trim().split(/\s+/).filter(Boolean);
   if (parts.length === 0) return 'U';
@@ -49,9 +44,24 @@ function getTimeOfDayGreeting(): string {
 }
 
 export default function InicioScreen() {
-  const displayName = getDisplayName();
-  const [clabeCopied, setClabeCopied] = useState(false);
+  const userId = useSessionStore((s) => s.userId);
+  const clearSession = useSessionStore((s) => s.clearSession);
+  const [copiedAccountId, setCopiedAccountId] = useState<string | null>(null);
   const copyResetTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const { data: profileData } = useQuery({
+    queryKey: ['profile', userId],
+    queryFn: () => getProfile(userId as string),
+    enabled: !!userId,
+  });
+  const { data: accountsData, isLoading: accountsLoading } = useQuery({
+    queryKey: ['accounts', userId],
+    queryFn: () => getAccounts(userId as string),
+    enabled: !!userId,
+  });
+
+  const displayName = profileData?.profile?.name ?? 'Usuario';
+  const accounts = accountsData?.accounts ?? [];
 
   useEffect(() => {
     return () => {
@@ -59,17 +69,31 @@ export default function InicioScreen() {
     };
   }, []);
 
-  const handleCopyClabe = async () => {
-    await Clipboard.setStringAsync(MOCK_ACCOUNT.clabe);
-    setClabeCopied(true);
+  const handleLogout = () => {
+    Alert.alert('Cerrar sesión', '¿Seguro que quieres cerrar tu sesión?', [
+      { text: 'Cancelar', style: 'cancel' },
+      {
+        text: 'Cerrar sesión',
+        style: 'destructive',
+        onPress: async () => {
+          await clearSession();
+          router.replace('/login');
+        },
+      },
+    ]);
+  };
+
+  const handleCopyAccountId = async (accountId: string) => {
+    await Clipboard.setStringAsync(accountId);
+    setCopiedAccountId(accountId);
     if (copyResetTimer.current) clearTimeout(copyResetTimer.current);
-    copyResetTimer.current = setTimeout(() => setClabeCopied(false), 1800);
+    copyResetTimer.current = setTimeout(() => setCopiedAccountId(null), 1800);
   };
 
   const quickActions: QuickAction[] = [
     {
       key: 'ahorros',
-      label: 'Ahorros',
+      label: 'Apartados',
       icon: 'save-outline',
       tint: accent.savingsTeal,
       onPress: () => router.push('/apartados'),
@@ -105,6 +129,9 @@ export default function InicioScreen() {
             <Pressable hitSlop={8}>
               <Ionicons name="notifications-outline" size={22} color={colors.text.onBrand} />
             </Pressable>
+            <Pressable hitSlop={8} onPress={handleLogout} accessibilityLabel="Cerrar sesión">
+              <Ionicons name="log-out-outline" size={22} color={colors.text.onBrand} />
+            </Pressable>
           </View>
         </View>
       </SafeAreaView>
@@ -132,30 +159,49 @@ export default function InicioScreen() {
           </AnimatedPressable>
         </Animated.View>
 
-        <Animated.View entering={FadeInUp.duration(280).delay(80)} style={styles.balanceCard}>
-          <View style={styles.balanceRow}>
-            <Text style={styles.balanceBankName}>{MOCK_ACCOUNT.bankName}</Text>
-            <Text style={styles.balanceAccountNumber}>{MOCK_ACCOUNT.maskedAccountNumber}</Text>
-          </View>
+        {accountsLoading ? (
+          <Animated.View entering={FadeInUp.duration(280).delay(80)} style={styles.balanceCard}>
+            <View style={styles.balanceLoading}>
+              <ActivityIndicator color={colors.brand.primary} />
+            </View>
+          </Animated.View>
+        ) : accounts.length > 0 ? (
+          accounts.map((account, index) => (
+            <Animated.View
+              key={account.id}
+              entering={FadeInUp.duration(280).delay(80 + index * 60)}
+              style={styles.balanceCard}
+            >
+              <View style={styles.balanceRow}>
+                <Text style={styles.balanceBankName}>{account.institution ?? 'Mi cuenta'}</Text>
+                <Text style={styles.balanceAccountNumber}>{formatAccountKind(account.kind)}</Text>
+              </View>
 
-          <View style={styles.balanceAmountBlock}>
-            <Text style={styles.balanceLabel}>Saldo disponible</Text>
-            <Text style={styles.balanceAmount}>
-              {formatBalance(MOCK_ACCOUNT.balance)} <Text style={styles.balanceCurrency}>{MOCK_ACCOUNT.currency}</Text>
-            </Text>
-          </View>
+              <View style={styles.balanceAmountBlock}>
+                <Text style={styles.balanceLabel}>Saldo disponible</Text>
+                <Text style={styles.balanceAmount}>
+                  {formatBalance(account.balance)}{' '}
+                  <Text style={styles.balanceCurrency}>{account.currency}</Text>
+                </Text>
+              </View>
 
-          <View style={styles.divider} />
+              <View style={styles.divider} />
 
-          <Pressable style={styles.clabeRow} onPress={handleCopyClabe} hitSlop={8}>
-            <Text style={styles.clabeText}>CLABE: {MOCK_ACCOUNT.clabe}</Text>
-            <Ionicons
-              name={clabeCopied ? 'checkmark' : 'copy-outline'}
-              size={16}
-              color={colors.brand.primary}
-            />
-          </Pressable>
-        </Animated.View>
+              <Pressable style={styles.clabeRow} onPress={() => handleCopyAccountId(account.id)} hitSlop={8}>
+                <Text style={styles.clabeText}>Cuenta: {account.id}</Text>
+                <Ionicons
+                  name={copiedAccountId === account.id ? 'checkmark' : 'copy-outline'}
+                  size={16}
+                  color={colors.brand.primary}
+                />
+              </Pressable>
+            </Animated.View>
+          ))
+        ) : (
+          <Animated.View entering={FadeInUp.duration(280).delay(80)} style={styles.balanceCard}>
+            <Text style={styles.balanceLabel}>No se encontraron cuentas.</Text>
+          </Animated.View>
+        )}
 
         <Animated.View entering={FadeInUp.duration(280).delay(160)} style={styles.shortcutsSection}>
           <Text style={styles.shortcutsTitle}>Operaciones rápidas</Text>
@@ -246,6 +292,7 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 4 },
     elevation: 2,
   },
+  balanceLoading: { paddingVertical: spacing.xl, alignItems: 'center' },
   balanceRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   balanceBankName: { ...typography.bodyStrong, color: colors.text.secondary },
   balanceAccountNumber: { ...typography.caption, color: colors.text.placeholder },

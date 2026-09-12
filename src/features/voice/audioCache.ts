@@ -1,5 +1,6 @@
 import { createAudioPlayer } from 'expo-audio';
-// See useVoiceRecorder.ts's note on the legacy expo-file-system import.
+// Legacy shim (still shipped in SDK 57 as of this writing) — the well-documented,
+// stable path for local file caching/download checks used here.
 import { cacheDirectory, downloadAsync, getInfoAsync } from 'expo-file-system/legacy';
 import { getAudioAssetUrl } from '../../api/endpoints';
 

@@ -13,11 +13,11 @@ import {
 import Animated, { FadeInUp } from 'react-native-reanimated';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AnimatedPressable } from '../../src/catalog/shared/AnimatedPressable';
+import { AbonoModal } from '../../src/features/loans/AbonoModal';
 import { LoanCard } from '../../src/features/loans/LoanCard';
-import { fetchMockLoans } from '../../src/features/loans/mockLoans';
+import { fetchLoans, type Loan } from '../../src/features/loans/loans';
+import { useSessionStore } from '../../src/state/session.store';
 import { colors, radius, spacing, typography } from '../../src/theme/tokens';
-
-const LOAN_QUERY_KEY = ['loans'] as const;
 
 const TERM_OPTIONS_MONTHS = [6, 12, 24, 36] as const;
 const PURPOSE_OPTIONS = ['Personal', 'Auto', 'Hogar', 'Educación', 'Negocio', 'Otro'] as const;
@@ -56,17 +56,23 @@ const RESULT_COPY: Record<
 };
 
 /**
- * The Préstamos tab: active loan list (Figma node 37:160) plus a manual
- * application entry point (proposal.md — no Figma reference for the form,
- * speced from product description and the loan-card visual language). All
- * data is mocked this pass (tasks.md §1 backend coordination is out of
- * scope) — TanStack Query wraps the mock fetch purely to exercise the same
- * data-fetching pattern real endpoints will use later.
+ * The Préstamos tab: active loan list (Figma node 37:160), sourced from the
+ * real backend (`GET /api/liabilities`, amitie/backend), plus a manual
+ * application entry point (proposal.md — no Figma reference for the form;
+ * loan origination has no backend endpoint yet, so that flow is still a UI
+ * simulation). "Abonar" applies a real payment against a liability via
+ * `AbonoModal` (POST /api/liabilities/{id}/payment).
  */
 export default function PrestamosScreen() {
   const insets = useSafeAreaInsets();
-  const { data: loans, isLoading } = useQuery({ queryKey: LOAN_QUERY_KEY, queryFn: fetchMockLoans });
+  const userId = useSessionStore((s) => s.userId);
+  const { data: loans, isLoading } = useQuery({
+    queryKey: ['loans', userId],
+    queryFn: () => fetchLoans(userId as string),
+    enabled: !!userId,
+  });
   const [isFormVisible, setFormVisible] = useState(false);
+  const [abonoLoan, setAbonoLoan] = useState<Loan | null>(null);
 
   const openForm = () => setFormVisible(true);
   const closeForm = () => setFormVisible(false);
@@ -92,7 +98,7 @@ export default function PrestamosScreen() {
           showsVerticalScrollIndicator={false}
           renderItem={({ item, index }) => (
             <Animated.View entering={FadeInUp.duration(260).delay(60 * index)}>
-              <LoanCard loan={item} />
+              <LoanCard loan={item} onAbonar={setAbonoLoan} />
             </Animated.View>
           )}
           ListHeaderComponent={
@@ -105,6 +111,7 @@ export default function PrestamosScreen() {
       )}
 
       <ApplicationModal visible={isFormVisible} onClose={closeForm} />
+      <AbonoModal loan={abonoLoan} userId={userId} onClose={() => setAbonoLoan(null)} />
     </SafeAreaView>
   );
 }
