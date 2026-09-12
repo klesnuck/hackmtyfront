@@ -176,21 +176,18 @@ export default function AsistenteScreen() {
     }
   }, [isActive]);
 
-  if (!isActive) {
-    return (
-      <SafeAreaView style={styles.screen} edges={['top', 'bottom']}>
-        <IdleGreeting onEscribir={handleEscribir} onHablar={handleHablar} />
-      </SafeAreaView>
-    );
-  }
+  const handleIdleSendText = () => {
+    if (!draft.trim()) return;
+    void submitText(draft);
+  };
 
   return (
     <SafeAreaView style={styles.screen} edges={['top', 'bottom']}>
-      <View style={styles.topBar}>
+      <View style={styles.idleTopBar}>
         <Pressable onPress={() => router.back()} hitSlop={8}>
-          <Ionicons name="chevron-back" size={24} color={colors.text.primary} />
+          <Ionicons name="chevron-back" size={24} color={colors.text.onBrand} />
         </Pressable>
-        <Text style={styles.topBarTitle}>Tu asistente</Text>
+        <Text style={styles.idleTopBarTitle}>Asistente IA</Text>
         <View style={{ width: 24 }} />
       </View>
 
@@ -203,82 +200,60 @@ export default function AsistenteScreen() {
           ref={listRef}
           data={turns}
           keyExtractor={(t) => t.id}
-          contentContainerStyle={styles.turns}
+          contentContainerStyle={styles.turnsContainer}
+          ListHeaderComponent={
+            <View style={styles.idleHeaderSection}>
+              <AnimatedOrb />
+              <View style={styles.idleTextGroup}>
+                <Text style={styles.idleTitle}>¿En qué te puedo ayudar?</Text>
+                <Text style={styles.idleSubtitle}>
+                  Hola Daniela, soy tu asesor de crédito. Puedo ayudarte con tus dudas o reestructurar tus préstamos.
+                </Text>
+              </View>
+
+              {/* Botón de micrófono grande centrado */}
+              <View style={styles.micWrapper}>
+                <RecordingPulse active={recorder.isRecording} />
+                <AnimatedPressable
+                  style={[styles.bigMicButton, recorder.isRecording && styles.bigMicButtonActive]}
+                  onPress={handleMicPress}
+                  disabled={recorder.state === 'requesting-permission' || recorder.state === 'processing'}
+                >
+                  <Ionicons name={recorder.isRecording ? 'stop' : 'mic'} size={36} color="#fff" />
+                </AnimatedPressable>
+              </View>
+
+              {/* Recuadro pequeño de texto abajo del micrófono */}
+              <View style={styles.idleInputContainer}>
+                <TextInput
+                  ref={textInputRef}
+                  style={styles.idleTextInput}
+                  value={draft}
+                  onChangeText={setDraft}
+                  placeholder="Escribe aquí..."
+                  placeholderTextColor={colors.text.placeholder}
+                  editable={!recorder.isRecording}
+                  onSubmitEditing={handleIdleSendText}
+                  returnKeyType="send"
+                />
+                <Pressable
+                  onPress={handleIdleSendText}
+                  disabled={!draft.trim() || isSending}
+                  style={styles.idleSendIcon}
+                >
+                  <Ionicons
+                    name="arrow-up-circle"
+                    size={32}
+                    color={draft.trim() && !isSending ? colors.brand.primary : colors.text.placeholder}
+                  />
+                </Pressable>
+              </View>
+            </View>
+          }
           renderItem={({ item }) => <TurnBubble turn={item} catalogId={catalogId} />}
-          ListEmptyComponent={<EmptyState />}
         />
-
-        <View style={styles.inputBar}>
-          <View style={styles.micWrapper}>
-            <RecordingPulse active={recorder.isRecording} />
-            <AnimatedPressable
-              style={[styles.micButton, recorder.isRecording && styles.micButtonActive]}
-              onPress={handleMicPress}
-              disabled={recorder.state === 'requesting-permission' || recorder.state === 'processing'}
-            >
-              <Ionicons name={recorder.isRecording ? 'stop' : 'mic'} size={22} color="#fff" />
-            </AnimatedPressable>
-          </View>
-
-          <TextInput
-            ref={textInputRef}
-            style={styles.textInput}
-            value={draft}
-            onChangeText={setDraft}
-            placeholder="Escribe tu mensaje..."
-            placeholderTextColor={colors.text.placeholder}
-            editable={!recorder.isRecording}
-            onSubmitEditing={() => submitText(draft)}
-            returnKeyType="send"
-          />
-
-          <Pressable
-            onPress={() => submitText(draft)}
-            disabled={!draft.trim() || isSending}
-            style={[styles.sendButton, (!draft.trim() || isSending) && styles.sendButtonDisabled]}
-          >
-            <Ionicons name="arrow-up" size={18} color="#fff" />
-          </Pressable>
-        </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
-  );
-}
-
-/** Figma 37:123 — the tab's landing state: header, orb, greeting, entry actions. */
-function IdleGreeting({ onEscribir, onHablar }: { onEscribir: () => void; onHablar: () => void }) {
-  return (
-    <View style={styles.idleScreen}>
-      <View style={styles.idleTopBar}>
-        <Pressable onPress={() => router.back()} hitSlop={8}>
-          <Ionicons name="chevron-back" size={24} color={colors.text.onBrand} />
-        </Pressable>
-        <Text style={styles.idleTopBarTitle}>Asistente IA</Text>
-        <View style={{ width: 24 }} />
-      </View>
-
-      <View style={styles.idleBody}>
-        <AnimatedOrb />
-        <View style={styles.idleTextGroup}>
-          <Text style={styles.idleTitle}>¿En qué te puedo ayudar?</Text>
-          <Text style={styles.idleSubtitle}>
-            Hola Carlos, soy tu asesor de crédito. Puedo analizar tu historial para ofrecerte un préstamo
-            pre-aprobado en 5 minutos.
-          </Text>
-        </View>
-      </View>
-
-      <View style={styles.idleActions}>
-        <AnimatedPressable style={styles.writeButton} onPress={onEscribir}>
-          <Ionicons name="keypad-outline" size={20} color={colors.text.primary} />
-          <Text style={styles.writeButtonText}>Escribir</Text>
-        </AnimatedPressable>
-        <AnimatedPressable style={styles.talkButton} onPress={onHablar}>
-          <Ionicons name="mic" size={20} color={colors.text.onBrand} />
-          <Text style={styles.talkButtonText}>Hablar</Text>
-        </AnimatedPressable>
-      </View>
-    </View>
   );
 }
 
@@ -420,45 +395,63 @@ const styles = StyleSheet.create({
   // exactly) — kept as literal pixel values, same precedent as this file's
   // pre-existing `paddingTop: 80` in EmptyState, since the spacing scale has
   // no 48/64/100 step.
-  idleBody: {
-    flex: 1,
-    alignItems: 'center',
-    gap: 48,
-    paddingTop: 100,
-    paddingBottom: 64,
-    paddingHorizontal: spacing.xxl,
+  turnsContainer: {
+    paddingHorizontal: spacing.xl,
+    paddingBottom: spacing.xxl,
+    gap: spacing.lg,
   },
-  idleTextGroup: { alignItems: 'center', gap: spacing.md },
-  idleTitle: { ...typography.h2, color: colors.text.primary, textAlign: 'center' },
-  idleSubtitle: { ...typography.body, color: colors.text.secondary, textAlign: 'center' },
-
-  idleActions: {
-    flexDirection: 'row',
-    gap: spacing.md,
-    padding: spacing.xxl,
-  },
-  writeButton: {
-    flex: 1,
-    flexDirection: 'row',
+  idleHeaderSection: {
     alignItems: 'center',
     justifyContent: 'center',
-    gap: spacing.sm,
-    height: 48,
-    borderRadius: radius.lg,
-    backgroundColor: colors.surface.field,
+    gap: spacing.lg,
+    paddingTop: spacing.xl,
+    paddingBottom: spacing.xl,
+    paddingHorizontal: spacing.xl,
+  },
+
+  idleTextGroup: { alignItems: 'center', gap: spacing.sm },
+  idleTitle: { ...typography.h2, color: colors.text.primary, textAlign: 'center' },
+  idleSubtitle: { ...typography.body, color: colors.text.secondary, textAlign: 'center', fontSize: 14 },
+
+  bigMicButton: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: colors.brand.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: colors.brand.primary,
+    shadowOpacity: 0.4,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 6,
+    marginVertical: spacing.sm,
+  },
+  bigMicButtonActive: {
+    backgroundColor: colors.text.danger,
+    shadowColor: colors.text.danger,
+  },
+
+  idleInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    width: '100%',
+    maxWidth: 340,
+    height: 50,
+    borderRadius: radius.pill,
+    backgroundColor: colors.surface.card,
     borderWidth: 1,
     borderColor: colors.border.subtle,
+    paddingLeft: spacing.lg,
+    paddingRight: spacing.xs,
   },
-  writeButtonText: { ...typography.bodyStrong, color: colors.text.primary },
-  talkButton: {
+  idleTextInput: {
     flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.sm,
-    height: 48,
-    borderRadius: radius.lg,
-    backgroundColor: colors.brand.primary,
+    height: '100%',
+    color: colors.text.primary,
+    fontSize: 14,
   },
-  talkButtonText: { ...typography.bodyStrong, color: colors.text.onBrand },
+  idleSendIcon: {
+    padding: spacing.xs,
+  },
 });

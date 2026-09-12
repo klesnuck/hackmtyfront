@@ -113,7 +113,7 @@ export default function InicioScreen() {
         <Animated.View entering={FadeInDown.duration(280)}>
           <AnimatedPressable
             style={styles.banner}
-            onPress={() => router.push('/asistente-prestamos')}
+            onPress={() => router.push('/asistente')}
           >
             <View style={styles.bannerGlow} />
             <View style={styles.bannerText}>

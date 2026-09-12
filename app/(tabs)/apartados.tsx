@@ -97,14 +97,10 @@ export default function ApartadosScreen() {
             </AnimatedPressable>
           </Animated.View>
         ) : (
-          vehicles.map((vehicle, index) => (
-            <Animated.View
-              key={vehicle.id}
-              entering={FadeInUp.duration(260).delay(60 * index)}
-              style={styles.cardWrapper}
-            >
+          vehicles.map((vehicle) => (
+            <View key={vehicle.id} style={styles.cardWrapper}>
               <SavingsCard vehicle={vehicle} onContribute={() => setContributeTarget(vehicle)} />
-            </Animated.View>
+            </View>
           ))
         )}
       </ScrollView>
@@ -171,63 +167,64 @@ function CreateSavingsModal({ visible, isSubmitting, onClose, onSubmit }: Create
   };
 
   return (
-    <Modal visible={visible} transparent animationType="none" onRequestClose={onClose}>
-      <Animated.View entering={FadeIn.duration(150)} exiting={FadeOut.duration(150)} style={styles.overlay}>
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={styles.overlay}
+      >
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.sheetKeyboardWrapper}>
-          <Animated.View entering={SlideInDown.springify().damping(18)} exiting={SlideOutDown.duration(200)} style={styles.sheet}>
-            <Text style={styles.sheetTitle}>Nuevo apartado</Text>
+        <View style={styles.sheet}>
+          <Text style={styles.sheetTitle}>Nuevo apartado</Text>
 
-            <View style={styles.field}>
-              <Text style={styles.fieldLabel}>Nombre</Text>
-              <TextInput
-                style={styles.input}
-                value={name}
-                onChangeText={setName}
-                placeholder="Ej. Meta Vacaciones"
-                placeholderTextColor={colors.text.placeholder}
-              />
+          <View style={styles.field}>
+            <Text style={styles.fieldLabel}>Nombre</Text>
+            <TextInput
+              style={styles.input}
+              value={name}
+              onChangeText={setName}
+              placeholder="Ej. Meta Vacaciones"
+              placeholderTextColor={colors.text.placeholder}
+            />
+          </View>
+
+          <View style={styles.field}>
+            <Text style={styles.fieldLabel}>Monto inicial (opcional)</Text>
+            <TextInput
+              style={styles.input}
+              value={initialAmount}
+              onChangeText={setInitialAmount}
+              placeholder="$0.00"
+              placeholderTextColor={colors.text.placeholder}
+              keyboardType="decimal-pad"
+            />
+          </View>
+
+          <View style={styles.field}>
+            <Text style={styles.fieldLabel}>Tipo de apartado</Text>
+            <View style={styles.chipRow}>
+              {(Object.keys(VEHICLE_TYPE_LABEL) as SavingsVehicleType[]).map((type) => (
+                <Pressable
+                  key={type}
+                  style={[styles.chip, vehicleType === type && styles.chipSelected]}
+                  onPress={() => setVehicleType(type)}
+                >
+                  <Text style={[styles.chipText, vehicleType === type && styles.chipTextSelected]}>
+                    {VEHICLE_TYPE_LABEL[type]}
+                  </Text>
+                </Pressable>
+              ))}
             </View>
+          </View>
 
-            <View style={styles.field}>
-              <Text style={styles.fieldLabel}>Monto inicial (opcional)</Text>
-              <TextInput
-                style={styles.input}
-                value={initialAmount}
-                onChangeText={setInitialAmount}
-                placeholder="$0.00"
-                placeholderTextColor={colors.text.placeholder}
-                keyboardType="decimal-pad"
-              />
-            </View>
-
-            <View style={styles.field}>
-              <Text style={styles.fieldLabel}>Tipo de apartado</Text>
-              <View style={styles.chipRow}>
-                {(Object.keys(VEHICLE_TYPE_LABEL) as SavingsVehicleType[]).map((type) => (
-                  <Pressable
-                    key={type}
-                    style={[styles.chip, vehicleType === type && styles.chipSelected]}
-                    onPress={() => setVehicleType(type)}
-                  >
-                    <Text style={[styles.chipText, vehicleType === type && styles.chipTextSelected]}>
-                      {VEHICLE_TYPE_LABEL[type]}
-                    </Text>
-                  </Pressable>
-                ))}
-              </View>
-            </View>
-
-            <AnimatedPressable
-              style={[styles.submitButton, (!name.trim() || isSubmitting) && styles.submitButtonDisabled]}
-              onPress={handleSubmit}
-              disabled={!name.trim() || isSubmitting}
-            >
-              <Text style={styles.submitButtonText}>{isSubmitting ? 'Creando...' : 'Crear apartado'}</Text>
-            </AnimatedPressable>
-          </Animated.View>
-        </KeyboardAvoidingView>
-      </Animated.View>
+          <AnimatedPressable
+            style={[styles.submitButton, (!name.trim() || isSubmitting) && styles.submitButtonDisabled]}
+            onPress={handleSubmit}
+            disabled={!name.trim() || isSubmitting}
+          >
+            <Text style={styles.submitButtonText}>{isSubmitting ? 'Creando...' : 'Crear apartado'}</Text>
+          </AnimatedPressable>
+        </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
@@ -239,9 +236,6 @@ type ContributeModalProps = {
   onSubmit: (amount: number) => void;
 };
 
-// "Aportar fondos" (tasks.md §4): the top-up target's real shape is still
-// unconfirmed with backend, so this only simulates adding funds to the local
-// mock vehicle (SPECS.md §12 excludes real payment rails regardless).
 function ContributeModal({ vehicle, isSubmitting, onClose, onSubmit }: ContributeModalProps) {
   const [amount, setAmount] = useState('');
 
@@ -253,37 +247,38 @@ function ContributeModal({ vehicle, isSubmitting, onClose, onSubmit }: Contribut
   };
 
   return (
-    <Modal visible={vehicle !== null} transparent animationType="none" onRequestClose={onClose}>
-      <Animated.View entering={FadeIn.duration(150)} exiting={FadeOut.duration(150)} style={styles.overlay}>
+    <Modal visible={vehicle !== null} transparent animationType="fade" onRequestClose={onClose}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={styles.overlay}
+      >
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.sheetKeyboardWrapper}>
-          <Animated.View entering={SlideInDown.springify().damping(18)} exiting={SlideOutDown.duration(200)} style={styles.sheet}>
-            <Text style={styles.sheetTitle}>Aportar fondos</Text>
-            {vehicle && <Text style={styles.sheetSubtitle}>{vehicle.name}</Text>}
+        <View style={styles.sheet}>
+          <Text style={styles.sheetTitle}>Aportar fondos</Text>
+          {vehicle && <Text style={styles.sheetSubtitle}>{vehicle.name}</Text>}
 
-            <View style={styles.field}>
-              <Text style={styles.fieldLabel}>Monto a aportar</Text>
-              <TextInput
-                style={styles.input}
-                value={amount}
-                onChangeText={setAmount}
-                placeholder="$0.00"
-                placeholderTextColor={colors.text.placeholder}
-                keyboardType="decimal-pad"
-                autoFocus
-              />
-            </View>
+          <View style={styles.field}>
+            <Text style={styles.fieldLabel}>Monto a aportar</Text>
+            <TextInput
+              style={styles.input}
+              value={amount}
+              onChangeText={setAmount}
+              placeholder="$0.00"
+              placeholderTextColor={colors.text.placeholder}
+              keyboardType="decimal-pad"
+              autoFocus
+            />
+          </View>
 
-            <AnimatedPressable
-              style={[styles.submitButton, (!amount.trim() || isSubmitting) && styles.submitButtonDisabled]}
-              onPress={handleSubmit}
-              disabled={!amount.trim() || isSubmitting}
-            >
-              <Text style={styles.submitButtonText}>{isSubmitting ? 'Aportando...' : 'Aportar'}</Text>
-            </AnimatedPressable>
-          </Animated.View>
-        </KeyboardAvoidingView>
-      </Animated.View>
+          <AnimatedPressable
+            style={[styles.submitButton, (!amount.trim() || isSubmitting) && styles.submitButtonDisabled]}
+            onPress={handleSubmit}
+            disabled={!amount.trim() || isSubmitting}
+          >
+            <Text style={styles.submitButtonText}>{isSubmitting ? 'Aportando...' : 'Aportar'}</Text>
+          </AnimatedPressable>
+        </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
