@@ -12,7 +12,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
+import Animated, { FadeInUp } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { AnimatedPressable } from '../src/catalog/shared/AnimatedPressable';
 import { useCreateSession } from '../src/features/session/useCreateSession';
@@ -101,13 +101,6 @@ export default function LoginScreen() {
               <Text style={styles.loginButtonText}>Entrar de forma segura</Text>
             )}
           </AnimatedPressable>
-
-          <Animated.View entering={FadeInDown.duration(280).delay(160)} style={styles.biometricSection}>
-            <Text style={styles.biometricLabel}>O ingresa con tu huella o Face ID</Text>
-            <AnimatedPressable style={styles.biometricButton} onPress={handleLogin} disabled={isPending}>
-              <Ionicons name="finger-print-outline" size={28} color={colors.brand.primary} />
-            </AnimatedPressable>
-          </Animated.View>
         </Animated.View>
       </KeyboardAvoidingView>
     </View>
@@ -123,7 +116,7 @@ const styles = StyleSheet.create({
   logoBar: { width: 8, height: 38, backgroundColor: colors.text.onBrand, borderRadius: 4 },
   tagline: { fontSize: 14, fontWeight: '500', color: colors.text.onBrandMuted, textTransform: 'uppercase' },
 
-  cardWrapper: { flex: 1, marginTop: -40 },
+  cardWrapper: { flex: 1, marginTop: -16 },
   card: {
     flex: 1,
     backgroundColor: colors.surface.card,
@@ -161,17 +154,4 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   loginButtonText: { ...typography.button, color: colors.text.onBrand },
-
-  biometricSection: { alignItems: 'center', gap: spacing.md, paddingTop: spacing.md },
-  biometricLabel: { ...typography.body, color: colors.text.secondary, fontSize: 14 },
-  biometricButton: {
-    width: 56,
-    height: 56,
-    borderRadius: radius.pill,
-    backgroundColor: colors.surface.field,
-    borderWidth: 1,
-    borderColor: colors.border.subtle,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
 });
