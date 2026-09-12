@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import Constants from 'expo-constants';
-import { router, useLocalSearchParams } from 'expo-router';
-import { useEffect, useRef, useState } from 'react';
+import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   FlatList,
   KeyboardAvoidingView,
@@ -14,14 +14,15 @@ import {
 } from 'react-native';
 import Animated, { FadeInUp } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { A2UISurface, useA2UIStore } from '../src/a2ui';
-import { sendMessage } from '../src/api/endpoints';
-import { AnimatedPressable } from '../src/catalog/shared/AnimatedPressable';
-import { playAudioAsset } from '../src/features/voice/audioCache';
-import { RecordingPulse } from '../src/features/voice/RecordingPulse';
-import { useVoiceRecorder } from '../src/features/voice/useVoiceRecorder';
-import { useActiveCatalogId, useSessionStore } from '../src/state/session.store';
-import { colors, radius, spacing, typography } from '../src/theme/tokens';
+import { A2UISurface, useA2UIStore } from '../../src/a2ui';
+import { sendMessage } from '../../src/api/endpoints';
+import { AnimatedPressable } from '../../src/catalog/shared/AnimatedPressable';
+import { AnimatedOrb } from '../../src/features/assistant-orb/AnimatedOrb';
+import { playAudioAsset } from '../../src/features/voice/audioCache';
+import { RecordingPulse } from '../../src/features/voice/RecordingPulse';
+import { useVoiceRecorder } from '../../src/features/voice/useVoiceRecorder';
+import { useActiveCatalogId, useSessionStore } from '../../src/state/session.store';
+import { colors, radius, spacing, typography } from '../../src/theme/tokens';
 
 type Turn =
   | { id: string; role: 'user'; text: string }
@@ -38,8 +39,14 @@ const INTENT_PROMPTS: Record<string, string> = {
  * inline in the conversation, via the SAME <A2UISurface /> used by the Kill
  * Test (MOBILE_ARCHITECTURE.md §8). This screen owns turn-taking and voice
  * capture; it never inspects or special-cases what the agent generates.
+ *
+ * It also owns the idle -> active state machine added on top of that
+ * (Figma 37:123): the Soporte IA tab lands on a greeting/orb screen until
+ * the user picks "Escribir" / "Hablar", a turn is sent, or the screen is
+ * reached with a dashboard `intent` already attached (which skips idle
+ * entirely and fires the existing initial-intent effect below).
  */
-export default function AssistantScreen() {
+export default function AsistenteScreen() {
   const { intent } = useLocalSearchParams<{ intent?: string }>();
   const sessionId = useSessionStore((s) => s.sessionId);
   const catalogId = useActiveCatalogId();
@@ -49,10 +56,27 @@ export default function AssistantScreen() {
   const [turns, setTurns] = useState<Turn[]>([]);
   const [draft, setDraft] = useState('');
   const [isSending, setIsSending] = useState(false);
+  const [manualActive, setManualActive] = useState(false);
   const listRef = useRef<FlatList<Turn>>(null);
+  const textInputRef = useRef<TextInput>(null);
+  const focusDraftOnActive = useRef(false);
   const hasSentInitialIntent = useRef(false);
 
   const baseUrl = (Constants.expoConfig?.extra?.apiBaseUrl as string | undefined) ?? '';
+  const hasIntentPrompt = Boolean(intent && INTENT_PROMPTS[intent]);
+  const isActive = turns.length > 0 || manualActive || hasIntentPrompt;
+
+  // Per the change's tasks.md 4.2: revisiting the tab with no conversation
+  // started yet (and no dashboard intent to consume) lands back on the idle
+  // greeting — even if the user had tapped "Escribir"/"Hablar" but never
+  // actually sent a turn before switching away.
+  useFocusEffect(
+    useCallback(() => {
+      if (turns.length === 0 && !hasIntentPrompt) {
+        setManualActive(false);
+      }
+    }, [turns.length, hasIntentPrompt]),
+  );
 
   const appendTurn = (turn: Turn) => setTurns((prev) => [...prev, turn]);
 
@@ -114,6 +138,16 @@ export default function AssistantScreen() {
     }
   };
 
+  const handleEscribir = () => {
+    focusDraftOnActive.current = true;
+    setManualActive(true);
+  };
+
+  const handleHablar = () => {
+    setManualActive(true);
+    void handleMicPress();
+  };
+
   // Deliberate one-shot: fires the dashboard's quick-action prompt exactly
   // once (guarded by the ref, not by the dep array) as soon as a session
   // exists. submitText is intentionally omitted from deps — it closes over
@@ -131,6 +165,24 @@ export default function AssistantScreen() {
   useEffect(() => {
     listRef.current?.scrollToEnd({ animated: true });
   }, [turns.length]);
+
+  // "Escribir" focuses the text input once the active view has actually
+  // mounted (the TextInput doesn't exist yet during the idle render).
+  useEffect(() => {
+    if (isActive && focusDraftOnActive.current) {
+      focusDraftOnActive.current = false;
+      const timer = setTimeout(() => textInputRef.current?.focus(), 60);
+      return () => clearTimeout(timer);
+    }
+  }, [isActive]);
+
+  if (!isActive) {
+    return (
+      <SafeAreaView style={styles.screen} edges={['top', 'bottom']}>
+        <IdleGreeting onEscribir={handleEscribir} onHablar={handleHablar} />
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.screen} edges={['top', 'bottom']}>
@@ -169,6 +221,7 @@ export default function AssistantScreen() {
           </View>
 
           <TextInput
+            ref={textInputRef}
             style={styles.textInput}
             value={draft}
             onChangeText={setDraft}
@@ -189,6 +242,43 @@ export default function AssistantScreen() {
         </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
+  );
+}
+
+/** Figma 37:123 — the tab's landing state: header, orb, greeting, entry actions. */
+function IdleGreeting({ onEscribir, onHablar }: { onEscribir: () => void; onHablar: () => void }) {
+  return (
+    <View style={styles.idleScreen}>
+      <View style={styles.idleTopBar}>
+        <Pressable onPress={() => router.back()} hitSlop={8}>
+          <Ionicons name="chevron-back" size={24} color={colors.text.onBrand} />
+        </Pressable>
+        <Text style={styles.idleTopBarTitle}>Asistente IA</Text>
+        <View style={{ width: 24 }} />
+      </View>
+
+      <View style={styles.idleBody}>
+        <AnimatedOrb />
+        <View style={styles.idleTextGroup}>
+          <Text style={styles.idleTitle}>¿En qué te puedo ayudar?</Text>
+          <Text style={styles.idleSubtitle}>
+            Hola Carlos, soy tu asesor de crédito. Puedo analizar tu historial para ofrecerte un préstamo
+            pre-aprobado en 5 minutos.
+          </Text>
+        </View>
+      </View>
+
+      <View style={styles.idleActions}>
+        <AnimatedPressable style={styles.writeButton} onPress={onEscribir}>
+          <Ionicons name="keypad-outline" size={20} color={colors.text.primary} />
+          <Text style={styles.writeButtonText}>Escribir</Text>
+        </AnimatedPressable>
+        <AnimatedPressable style={styles.talkButton} onPress={onHablar}>
+          <Ionicons name="mic" size={20} color={colors.text.onBrand} />
+          <Text style={styles.talkButtonText}>Hablar</Text>
+        </AnimatedPressable>
+      </View>
+    </View>
   );
 }
 
@@ -314,4 +404,61 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   sendButtonDisabled: { opacity: 0.4 },
+
+  idleScreen: { flex: 1, justifyContent: 'space-between' },
+  idleTopBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    height: 56,
+    paddingHorizontal: spacing.xl,
+    backgroundColor: colors.brand.primary,
+  },
+  idleTopBarTitle: { ...typography.h3, color: colors.text.onBrand },
+
+  // Figma 37:123's ai-body uses literal pt-100/pb-64/gap-48 (px-24 = spacing.xxl
+  // exactly) — kept as literal pixel values, same precedent as this file's
+  // pre-existing `paddingTop: 80` in EmptyState, since the spacing scale has
+  // no 48/64/100 step.
+  idleBody: {
+    flex: 1,
+    alignItems: 'center',
+    gap: 48,
+    paddingTop: 100,
+    paddingBottom: 64,
+    paddingHorizontal: spacing.xxl,
+  },
+  idleTextGroup: { alignItems: 'center', gap: spacing.md },
+  idleTitle: { ...typography.h2, color: colors.text.primary, textAlign: 'center' },
+  idleSubtitle: { ...typography.body, color: colors.text.secondary, textAlign: 'center' },
+
+  idleActions: {
+    flexDirection: 'row',
+    gap: spacing.md,
+    padding: spacing.xxl,
+  },
+  writeButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    height: 48,
+    borderRadius: radius.lg,
+    backgroundColor: colors.surface.field,
+    borderWidth: 1,
+    borderColor: colors.border.subtle,
+  },
+  writeButtonText: { ...typography.bodyStrong, color: colors.text.primary },
+  talkButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    height: 48,
+    borderRadius: radius.lg,
+    backgroundColor: colors.brand.primary,
+  },
+  talkButtonText: { ...typography.bodyStrong, color: colors.text.onBrand },
 });

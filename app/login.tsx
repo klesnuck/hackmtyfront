@@ -38,7 +38,7 @@ export default function LoginScreen() {
   const handleLogin = () => {
     createSession(
       { username, password },
-      { onSuccess: () => router.replace('/dashboard') },
+      { onSuccess: () => router.replace('/inicio') },
     );
   };
 

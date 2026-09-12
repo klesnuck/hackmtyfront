@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { AnimatedPressable } from '../src/catalog/shared/AnimatedPressable';
@@ -15,31 +15,41 @@ type QuickAction = {
 };
 
 /**
- * The fixed app shell the user lands on after login — NOT agent-generated
- * (see MOBILE_ARCHITECTURE.md §0/§2: A2UI surfaces render inside the
- * assistant screen, not here). Its job is to get the user talking to the
- * agent as fast as possible, which is where the actual product happens.
+ * Intermediate routing panel reached from the Inicio dashboard's "Asistente
+ * de Préstamos IA" banner (see openspec/changes/add-navigation-and-dashboard
+ * /design.md "Repurposing decision") — not a generic dashboard. Its job is
+ * narrowing down which specific thing the user wants (La Mesa vs. Saving
+ * Bags) before handing off to the assistant with that intent attached. A
+ * pushed stack screen now, not the landing screen, hence the back chevron.
  */
-export default function DashboardScreen() {
+export default function AsistentePrestamosScreen() {
   const actions: QuickAction[] = [
     {
       key: 'la-mesa',
       icon: 'wallet-outline',
       title: 'Manejar mi deuda',
       subtitle: 'La Mesa — reestructura y negocia',
-      onPress: () => router.push({ pathname: '/assistant', params: { intent: 'la-mesa' } }),
+      onPress: () => router.push({ pathname: '/asistente', params: { intent: 'la-mesa' } }),
     },
     {
       key: 'saving-bags',
       icon: 'save-outline',
       title: 'Nueva meta de ahorro',
       subtitle: 'Saving Bags — dile a dónde quieres llegar',
-      onPress: () => router.push({ pathname: '/assistant', params: { intent: 'saving-bags' } }),
+      onPress: () => router.push({ pathname: '/asistente', params: { intent: 'saving-bags' } }),
     },
   ];
 
   return (
     <SafeAreaView style={styles.screen} edges={['top', 'bottom']}>
+      <View style={styles.topBar}>
+        <Pressable onPress={() => router.back()} hitSlop={8}>
+          <Ionicons name="chevron-back" size={24} color={colors.text.primary} />
+        </Pressable>
+        <Text style={styles.topBarTitle}>Asistente de Préstamos IA</Text>
+        <View style={{ width: 24 }} />
+      </View>
+
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <Animated.View entering={FadeInDown.duration(280)} style={styles.greetingBlock}>
           <Text style={styles.greetingEyebrow}>Bienvenido de nuevo</Text>
@@ -67,7 +77,7 @@ export default function DashboardScreen() {
       <Animated.View entering={FadeInUp.duration(320).delay(240)} style={styles.assistantCta}>
         <AnimatedPressable
           style={styles.assistantButton}
-          onPress={() => router.push({ pathname: '/assistant', params: {} })}
+          onPress={() => router.push({ pathname: '/asistente', params: {} })}
         >
           <Ionicons name="mic" size={22} color={colors.text.onBrand} />
           <Text style={styles.assistantButtonText}>Habla con tu asistente</Text>
@@ -79,6 +89,16 @@ export default function DashboardScreen() {
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.surface.app },
+
+  topBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.md,
+  },
+  topBarTitle: { ...typography.bodyStrong, color: colors.text.primary },
+
   content: { padding: spacing.xxl, gap: spacing.xxl, paddingBottom: 120 },
 
   greetingBlock: { gap: spacing.xs },

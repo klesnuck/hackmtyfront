@@ -18,6 +18,29 @@ The current `app/dashboard.tsx` and `app/assistant.tsx` were built without the F
 - **Icons via `@expo/vector-icons`' Ionicons**, already a dependency (`mobile/catalog-standard`'s Icon component uses it) — reuse the same icon set rather than introducing a second one for nav-bar glyphs.
 - **Mock account data lives in one module** (`src/features/dashboard/mockAccount.ts` or similar) rather than inline in the component, so swapping to a real endpoint later touches one file.
 
+## Repurposing decision (2026-09-12)
+
+The current `app/dashboard.tsx` (pre-Figma) is not a generic dashboard — it's
+already an intermediate routing panel: two cards (La Mesa / Saving Bags) that
+each push to the assistant with a specific `intent` param, plus a general
+"Habla con tu asistente" CTA. Its job doesn't change; only how it's reached
+does. Instead of retiring it, it becomes the destination of the new
+dashboard's "Asistente de Préstamos IA" banner (§3), replacing the originally
+planned direct route to the Soporte IA tab — this screen's whole purpose is
+narrowing down which specific thing the user wants before handing off to the
+agent with that intent already attached, which is a better fit for a button
+literally named "Asistente de Préstamos IA" than dropping the user into the
+general orb/chat idle screen.
+
+Mechanically: its content moves, unchanged, to `app/asistente-prestamos.tsx`
+— a pushed (non-tab) stack screen, so the tab bar hides while it's open
+(matching how the assistant chat screen already behaves), with a back
+chevron added since it's no longer a tab root. No visual redesign: it
+already uses `theme/tokens.ts` exclusively, so the only style adjustment is
+the added header/back affordance for consistency with other pushed screens.
+Its navigation target updates from `/assistant` to `/asistente` to match
+`add-assistant-orb-screen`'s route rename.
+
 ## Risks / Trade-offs
 
 - Restructuring `app/dashboard.tsx` and `app/assistant.tsx` into `app/(tabs)/` changes their route paths (`/dashboard` → `/(tabs)/inicio` or similar) — anything that deep-links to the old paths (none currently, but worth noting) would need updating.

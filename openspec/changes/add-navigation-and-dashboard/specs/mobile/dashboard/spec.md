@@ -11,12 +11,12 @@ The system SHALL show a red header with a time-of-day greeting, the user's displ
 - **WHEN** the dashboard loads for a session with a known display name
 - **THEN** the header shows "Hola, buen día" (or an appropriate time-of-day variant) followed by the user's name, and an avatar with their initials
 
-### Requirement: AI banner promotes the assistant and routes to it
-The system SHALL show a dark promotional card ("Asistente de Préstamos AI") with a tap target that navigates to the Soporte IA tab.
+### Requirement: AI banner promotes the assistant and routes to the intent picker
+The system SHALL show a dark promotional card ("Asistente de Préstamos IA") with a tap target that navigates to `app/asistente-prestamos.tsx` — the existing La Mesa / Saving Bags intent-picker screen (repurposed, see `design.md`'s "Repurposing decision") — not the Soporte IA tab directly. That screen hands the user off to the assistant with a specific intent already attached.
 
 #### Scenario: Tapping the AI banner
 - **WHEN** the user taps the AI banner's arrow affordance
-- **THEN** the app navigates to the Soporte IA tab
+- **THEN** the app navigates to `app/asistente-prestamos.tsx`, where the user picks a specific need before reaching the assistant with that intent attached
 
 ### Requirement: Account balance card shows masked account info
 The system SHALL show a card with the account holder's bank account label, a masked account number, the available balance, and the CLABE with a copy-to-clipboard affordance.

@@ -8,7 +8,7 @@ Reviewing the Figma reference for the home screen (node `37:42`, fileKey `G8zaBT
 ## What Changes
 
 - Introduces bottom tab navigation (Expo Router `Tabs`) with 4 tabs: Inicio, Préstamos, Apartados, Soporte IA — matching Figma's `bottom-nav` component across every screen it appears on.
-- Rebuilds the dashboard (Inicio tab) to match Figma: header with greeting/avatar/bell, AI assistant banner (routes to the Soporte IA tab), account balance card, and a 3-icon quick-actions row (Ahorros → Apartados tab, Préstamos → Préstamos tab, Transferir → the transfers flow from `add-transfers`).
+- Rebuilds the dashboard (Inicio tab) to match Figma: header with greeting/avatar/bell, "Asistente de Préstamos IA" banner (routes to `app/asistente-prestamos.tsx`, the existing La Mesa/Saving Bags intent picker — see `design.md`'s "Repurposing decision", not the Soporte IA tab), account balance card, and a 3-icon quick-actions row (Ahorros → Apartados tab, Préstamos → Préstamos tab, Transferir → the transfers flow from `add-transfers`).
 - The Préstamos and Apartados tabs route to the screens introduced by `add-loans-management` and `add-savings-management` respectively — this change defines the tab shell and routes to them, not their content.
 
 ## Capabilities
@@ -19,6 +19,6 @@ Reviewing the Figma reference for the home screen (node `37:42`, fileKey `G8zaBT
 
 ## Impact
 
-- Restructures `app/` routing: `app/dashboard.tsx` and `app/assistant.tsx` move under a new `app/(tabs)/` group; `app/(tabs)/loans.tsx` and `app/(tabs)/savings.tsx` are added as route stubs here (their content is built by their own changes).
+- Restructures `app/` routing: `app/assistant.tsx` moves under a new `app/(tabs)/` group (renamed `asistente.tsx`, see `add-assistant-orb-screen`); `app/dashboard.tsx`'s content relocates to `app/asistente-prestamos.tsx` (pushed, non-tab — see `design.md`), and `app/(tabs)/inicio.tsx` is built fresh from Figma rather than being a move of the old dashboard; `app/(tabs)/prestamos.tsx` and `app/(tabs)/apartados.tsx` are added as route stubs here (their content is built by their own changes).
 - `app/login.tsx` and `app/index.tsx` stay outside the tab group (pre-session).
 - The account balance/CLABE data shown on the dashboard has no backing endpoint in `SPECS.md` §8 yet (the frozen contract has no "account" resource). This change uses mocked placeholder data and flags the gap in `design.md` — needs backend team coordination before this is real.

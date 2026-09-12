@@ -21,7 +21,7 @@ export default function Index() {
     );
   }
 
-  return <Redirect href={sessionId ? '/dashboard' : '/login'} />;
+  return <Redirect href={sessionId ? '/inicio' : '/login'} />;
 }
 
 const styles = StyleSheet.create({
