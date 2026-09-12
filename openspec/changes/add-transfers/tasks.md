@@ -5,17 +5,17 @@
 
 ## 2. Destination selection
 
-- [ ] 2.1 Build own-account selection UI
-- [ ] 2.2 Build third-party entry (CLABE/account number, syntactic validation, nickname + save)
+- [x] 2.1 Build own-account selection UI
+- [x] 2.2 Build third-party entry (CLABE/account number, syntactic validation, nickname + save)
 
 ## 3. Amount + confirmation
 
-- [ ] 3.1 Build amount entry with available-balance validation
-- [ ] 3.2 Build the confirmation/review screen
+- [x] 3.1 Build amount entry with available-balance validation
+- [x] 3.2 Build the confirmation/review screen
 
 ## 4. Submission + result
 
-- [ ] 4.1 Wire submission and success/failure result states
+- [x] 4.1 Wire submission and success/failure result states
 - [ ] 4.2 Invalidate/update the dashboard balance query on success
 
 ## 5. Verification
