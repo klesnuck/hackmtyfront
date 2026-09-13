@@ -112,9 +112,10 @@ export function useLoanConsult() {
    * on it alone drops the very first message of a session.
    */
   const send = useCallback(
-    async (text: string): Promise<LoansConsultPayload> => {
+    async (text: string, sessionIdOverride?: string): Promise<LoansConsultPayload> => {
       if (inFlightRef.current) throw new Error('useLoanConsult.send: a loan turn is already in flight');
-      if (!sessionIdRef.current) {
+      const activeSessionId = sessionIdOverride ?? sessionIdRef.current;
+      if (!activeSessionId) {
         throw new Error('useLoanConsult.send: no session — call greet() first');
       }
       inFlightRef.current = true;
@@ -123,7 +124,7 @@ export function useLoanConsult() {
 
       try {
         const payload = await loansConsult({
-          session_id: sessionIdRef.current,
+          session_id: activeSessionId,
           text,
           language: 'es-MX',
           loan_request_id: loanRequestIdRef.current,

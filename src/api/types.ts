@@ -290,11 +290,45 @@ export type LoansCreateRequest = {
   amount: number;
   months?: number;
   loan_request_id?: string;
+  purpose?: string;
+  purpose_private?: boolean;
 };
 
 export type LoanResponse = {
   status: 'ok' | 'error';
   loan: (LoanTerms & { id: string; userId: string }) | null;
   issues?: string[];
+};
+
+/** One row in the Préstamos list — a created loan or an active liability. */
+export type LoanListItem = {
+  source: 'loan' | 'liability';
+  id: string;
+  name: string;
+  status: string;
+  balance: number;
+  monthlyPayment: number;
+  progressPercent: number;
+  termMonths: number | null;
+  purpose: string | null;
+  purposePrivate: boolean;
+  dueDay: number | null;
+  createdAt: string | null;
+};
+
+export type LoansListResponse = {
+  status: string;
+  items: LoanListItem[];
+};
+
+export type LoanDetailResponse = {
+  status: 'ok' | 'error';
+  loan_id: string;
+  source: string | null;
+  catalog_id: string | null;
+  surface_id: string | null;
+  a2ui: A2UIMessage[];
+  audio_ref: string | null;
+  message?: string | null;
 };
 

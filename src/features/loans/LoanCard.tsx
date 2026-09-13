@@ -14,7 +14,15 @@ const currencyFormatter = new Intl.NumberFormat('es-MX', {
  * "Abonar" — wired to POST /api/liabilities/{id}/payment via the parent
  * screen's AbonoModal (src/features/loans/AbonoModal.tsx).
  */
-export function LoanCard({ loan, onAbonar }: { loan: Loan; onAbonar: (loan: Loan) => void }) {
+export function LoanCard({
+  loan,
+  onAbonar,
+  onPress,
+}: {
+  loan: Loan;
+  onAbonar: (loan: Loan) => void;
+  onPress?: (loan: Loan) => void;
+}) {
   const isOverdue = loan.status === 'overdue';
   const dotColor = isOverdue ? colors.text.danger : colors.brand.primary;
   const statusLabel = isOverdue ? (loan.overdueLabel ?? 'Atrasado') : 'Al corriente';
@@ -22,7 +30,7 @@ export function LoanCard({ loan, onAbonar }: { loan: Loan; onAbonar: (loan: Loan
   const progress = Math.min(100, Math.max(0, loan.progressPercent));
 
   return (
-    <View style={styles.card}>
+    <Pressable style={styles.card} onPress={() => onPress?.(loan)} disabled={!onPress}>
       <View style={styles.row}>
         <View style={styles.nameGroup}>
           <View style={[styles.dot, { backgroundColor: dotColor }]} />
@@ -58,11 +66,21 @@ export function LoanCard({ loan, onAbonar }: { loan: Loan; onAbonar: (loan: Loan
 
       <View style={styles.row}>
         <Text style={styles.nextPaymentLabel}>Siguiente pago: {loan.nextPaymentDate}</Text>
-        <Pressable onPress={() => onAbonar(loan)} hitSlop={8}>
-          <Text style={styles.payNowLabel}>Abonar</Text>
-        </Pressable>
+        {loan.source === 'liability' ? (
+          <Pressable
+            onPress={(event) => {
+              event.stopPropagation?.();
+              onAbonar(loan);
+            }}
+            hitSlop={8}
+          >
+            <Text style={styles.payNowLabel}>Abonar</Text>
+          </Pressable>
+        ) : (
+          <Text style={styles.payNowLabel}>Ver detalle</Text>
+        )}
       </View>
-    </View>
+    </Pressable>
   );
 }
 

@@ -1,6 +1,5 @@
 import { registerCatalog, type CatalogRegistry } from '../../a2ui/registry';
 import { AudioPlayer } from '../standard/AudioPlayer';
-import { Card } from '../standard/Card';
 import { CheckBox } from '../standard/CheckBox';
 import { ChoicePicker } from '../standard/ChoicePicker';
 import { DateTimeInput } from '../standard/DateTimeInput';
@@ -12,7 +11,6 @@ import { Slider } from '../standard/Slider';
 import { Tabs } from '../standard/Tabs';
 import { TextField } from '../standard/TextField';
 import { Video } from '../standard/Video';
-import { Badge } from '../standard/Badge';
 import { BreakAlert } from '../standard/BreakAlert';
 import { ForecastChart } from '../standard/ForecastChart';
 import { Heading } from '../standard/Heading';
@@ -21,7 +19,9 @@ import { LoanOffer } from '../standard/LoanOffer';
 import { PlanTable } from '../standard/PlanTable';
 import { ProgressBar } from '../standard/ProgressBar';
 import { ScenarioComparison } from '../standard/ScenarioComparison';
+import { Badge } from './Badge';
 import { Button } from './Button';
+import { Card } from './Card';
 import { Text } from './Text';
 
 /**

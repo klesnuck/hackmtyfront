@@ -1,11 +1,15 @@
-import { getLiabilities } from '../../api/endpoints';
-import type { Liability } from '../../api/types';
+import { listLoans } from '../../api/endpoints';
+import type { LoanListItem } from '../../api/types';
 
 export type LoanStatus = 'on-track' | 'overdue';
 
+export type LoanSource = 'loan' | 'liability';
+
 export type Loan = {
-  /** Same id as the backend liability (amitie/backend/db/schema.sql `liabilities.id`). */
+  /** Same id as the backend `loans.id` (created loan) or `liabilities.id`. */
   id: string;
+  /** Which backend record this row is; loan rows open the personalized detail page. */
+  source: LoanSource;
   name: string;
   status: LoanStatus;
   /** Only meaningful when status is 'overdue', e.g. "5 días de atraso". */
@@ -17,39 +21,36 @@ export type Loan = {
   progressPercent: number;
   /** Pre-formatted for display (e.g. "Día 5 de cada mes") — no date math needed client-side. */
   nextPaymentDate: string;
+  /** Why the user wanted the credit (null for liabilities or private reasons). */
+  purpose: string | null;
 };
 
-const CREDITOR_KIND_LABEL: Record<string, string> = {
-  credit_card: 'Tarjeta de crédito',
-  payroll_loan: 'Préstamo de nómina',
-  personal_loan: 'Préstamo personal',
-  store_credit: 'Crédito departamental',
-};
-
-function mapLiabilityToLoan(liability: Liability): Loan {
-  const kindLabel = CREDITOR_KIND_LABEL[liability.kind] ?? liability.kind;
-  const progress =
-    liability.principal > 0
-      ? Math.round(((liability.principal - liability.balance) / liability.principal) * 100)
-      : 0;
+function mapItem(item: LoanListItem): Loan {
+  const isLoan = item.source === 'loan';
+  let nextPaymentDate = 'Sin fecha registrada';
+  if (item.dueDay) {
+    nextPaymentDate = `Día ${item.dueDay} de cada mes`;
+  } else if (isLoan) {
+    nextPaymentDate = 'Día 5 de cada mes';
+  }
 
   return {
-    id: liability.id,
-    name: `${liability.creditor} · ${kindLabel}`,
-    // The backend does not track a "last payment made" date, only a recurring
-    // due day (schema.sql `liabilities.due_day`) — there is no real overdue
-    // signal to compute client-side, so every active liability reads as
-    // on-track rather than fabricating a late status.
+    id: item.id,
+    source: item.source,
+    name: item.name,
+    // The backend does not track a "last payment made" date, so nothing is
+    // fabricated as late; every active record reads as on-track.
     status: 'on-track',
-    remainingBalance: liability.balance,
-    monthlyPayment: liability.minPayment,
-    progressPercent: Math.min(100, Math.max(0, progress)),
-    nextPaymentDate: liability.dueDay ? `Día ${liability.dueDay} de cada mes` : 'Sin fecha registrada',
+    remainingBalance: item.balance,
+    monthlyPayment: item.monthlyPayment,
+    progressPercent: Math.min(100, Math.max(0, item.progressPercent)),
+    nextPaymentDate,
+    purpose: item.purpose,
   };
 }
 
-/** GET /api/liabilities, mapped to the shape the Préstamos screen renders. Paid-off liabilities drop off the list. */
+/** GET /api/loans — created loans + active liabilities in one list. */
 export async function fetchLoans(userId: string): Promise<Loan[]> {
-  const response = await getLiabilities(userId);
-  return response.liabilities.filter((item) => item.status === 'active').map(mapLiabilityToLoan);
+  const response = await listLoans(userId);
+  return response.items.map(mapItem);
 }

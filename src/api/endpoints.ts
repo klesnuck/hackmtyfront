@@ -163,11 +163,13 @@ export function submitTransfer(request: TransferRequest): Promise<TransferRespon
 import Constants from 'expo-constants';
 import { parseMultipartJsonPart } from './multipart';
 import type {
+  LoanDetailResponse,
   LoanResponse,
   LoansConsultPayload,
   LoansConsultRequest,
   LoansCreateRequest,
   LoansGreetingPayload,
+  LoansListResponse,
 } from './types';
 
 /** The configured backend origin (no trailing slash). */
@@ -239,5 +241,17 @@ export function createLoan(request: LoansCreateRequest): Promise<LoanResponse> {
 /** GET /api/loans/{loan_request_id} — hydrated terminal consult (JSON). */
 export function getLoanRequest(loanRequestId: string): Promise<LoansConsultPayload> {
   return apiRequest<LoansConsultPayload>(`/api/loans/${encodeURIComponent(loanRequestId)}`);
+}
+
+/** GET /api/loans?user_id= — one list of created loans + active liabilities. */
+export function listLoans(userId: string): Promise<LoansListResponse> {
+  return apiRequest<LoansListResponse>(`/api/loans?user_id=${encodeURIComponent(userId)}`);
+}
+
+/** GET /api/loans/{loan_id}/ui — personalized per-loan A2UI page (create-or-hydrate). */
+export function getLoanDetail(loanId: string, userId: string): Promise<LoanDetailResponse> {
+  return apiRequest<LoanDetailResponse>(
+    `/api/loans/${encodeURIComponent(loanId)}/ui?user_id=${encodeURIComponent(userId)}`,
+  );
 }
 
