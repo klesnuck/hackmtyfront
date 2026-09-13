@@ -21,6 +21,8 @@ import { ForecastChart } from './ForecastChart';
 import { Heading } from './Heading';
 import { LineChart } from './LineChart';
 import { LoanOffer } from './LoanOffer';
+import { LoanSummary } from './LoanSummary';
+import { LiabilitySummary } from './LiabilitySummary';
 import { PlanTable } from './PlanTable';
 import { ProgressBar } from './ProgressBar';
 import { ScenarioComparison } from './ScenarioComparison';
@@ -53,6 +55,8 @@ const standardCatalog: CatalogRegistry = {
   Badge,
   ProgressBar,
   LoanOffer,
+  LoanSummary,
+  LiabilitySummary,
   ScenarioComparison,
   PlanTable,
   ForecastChart,

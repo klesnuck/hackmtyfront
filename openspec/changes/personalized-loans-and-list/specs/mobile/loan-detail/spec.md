@@ -60,3 +60,42 @@ user's real financial activity.
 #### Scenario: Higher activity
 - **WHEN** the user has a higher audience/activity level
 - **THEN** the page may include denser, more technical sections (e.g. CAT, schedule, charts)
+
+### Requirement: The loan detail page is informational, never an offer
+Because the loan is already granted and active, the page SHALL NOT present offer
+or acceptance semantics: it SHALL NOT contain a `LoanOffer` component or a
+`request_loan` action, and this SHALL be enforced deterministically (not only by
+prompt), so a taken credit is never shown as available to accept again.
+
+#### Scenario: Model emits offer semantics
+- **WHEN** the generated payload contains a `LoanOffer` or a `request_loan` action
+- **THEN** it is stripped before persistence, and the page still renders (read-only)
+
+### Requirement: The page shows the loan's real information
+The page SHALL show a read-only `LoanSummary` (read-only; no action) and, adapted
+to the audience, how the payment splits between principal and interest over time,
+and the user's current risk/behavior insights computed from their own data.
+
+#### Scenario: Distribution view
+- **WHEN** the page is generated
+- **THEN** it includes a payment-distribution view (a table and/or chart depending on the profile)
+
+#### Scenario: Risk from current behavior
+- **WHEN** the page is generated
+- **THEN** its risk/insights come from a fresh deterministic recomputation for this loan, not a stored snapshot
+
+### Requirement: Structure follows the user profile
+The page structure SHALL be selected deterministically from the audience: `simple`
+users get an emoji/color, chart-free layout; `standard` users get one distribution
+view; `detailed` users get both a chart and a table plus the full risk metrics.
+
+#### Scenario: Simple audience
+- **WHEN** the audience is `simple`
+- **THEN** the page avoids tables/charts and uses large emoji-led summaries
+
+### Requirement: No text-to-speech on detail pages
+The loan detail page SHALL NOT synthesize or play speech.
+
+#### Scenario: Accessible user opens the page
+- **WHEN** an accessible/simple user opens the loan detail page
+- **THEN** no audio is generated and `audio_ref` is null

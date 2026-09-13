@@ -5,8 +5,9 @@ import type { ExpoConfig } from 'expo/config';
  * (local dev machine vs. the showcase backend) without a native rebuild.
  * See MOBILE_ARCHITECTURE.md §9 and eas.json's build profiles.
  */
-const API_BASE_URL =
-  process.env.EXPO_PUBLIC_API_BASE_URL ?? 'http://localhost:8000';
+const API_BASE_URL = (
+  process.env.EXPO_PUBLIC_API_BASE_URL ?? 'http://localhost:8000'
+).replace(/\/+$/, '');
 
 const config: ExpoConfig = {
   name: 'La Mesa',

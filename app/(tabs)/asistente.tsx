@@ -1,6 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useQueryClient } from '@tanstack/react-query';
-import Constants from 'expo-constants';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
@@ -19,7 +18,14 @@ import Animated, { SlideInDown } from 'react-native-reanimated';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { A2UISurface, useA2UIStore } from '../../src/a2ui';
 import { ApiError } from '../../src/api/client';
-import { agentGreeting, createLoan, createSession, sendMessage } from '../../src/api/endpoints';
+import {
+  agentGreeting,
+  createLoan,
+  createSession,
+  getApiBaseUrl,
+  getProfile,
+  sendMessage,
+} from '../../src/api/endpoints';
 import type { MessageRequest, SurfaceResponse } from '../../src/api/types';
 import { AnimatedPressable } from '../../src/catalog/shared/AnimatedPressable';
 import { AnimatedOrb } from '../../src/features/assistant-orb/AnimatedOrb';
@@ -63,21 +69,37 @@ export default function AsistenteScreen() {
   const loanConsult = useLoanConsult();
   const queryClient = useQueryClient();
 
+  const { data: profileData } = useQuery({
+    queryKey: ['profile', userId],
+    queryFn: () => getProfile(userId as string),
+    enabled: !!userId,
+  });
+
   const [mode, setMode] = useState<'la-mesa' | 'loans'>('la-mesa');
   const [panelState, setPanelState] = useState<PanelState>({ kind: 'idle' });
   const [draft, setDraft] = useState('');
   const [showFloatingInput, setShowFloatingInput] = useState(false);
   const [pendingLoanRequest, setPendingLoanRequest] = useState<{ amount: number; months?: number } | null>(null);
   const [isConfirmingLoan, setIsConfirmingLoan] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
 
   const textInputRef = useRef<TextInput>(null);
   const hasSentInitialIntent = useRef(false);
   const greetedForSessionRef = useRef<string | null>(null);
   const isPressingMicRef = useRef(false);
+  const noticeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const baseUrl = (Constants.expoConfig?.extra?.apiBaseUrl as string | undefined) ?? '';
+  const baseUrl = getApiBaseUrl();
+  const firstName = profileData?.profile?.name?.trim().split(/\s+/)[0] ?? null;
   const isRecording = speech.state !== 'idle';
   const inputBlocked = isSending || isRecording;
+
+  /** Transient, non-blocking feedback (the screen has no message list). */
+  const showNotice = useCallback((text: string) => {
+    setNotice(text);
+    if (noticeTimerRef.current) clearTimeout(noticeTimerRef.current);
+    noticeTimerRef.current = setTimeout(() => setNotice(null), 4000);
+  }, []);
 
   useEffect(() => {
     if (__DEV__) console.log('[asistente] apiBaseUrl in use:', baseUrl);
@@ -86,6 +108,13 @@ export default function AsistenteScreen() {
   useEffect(() => {
     loanConsult.setBaseUrl(baseUrl);
   }, [baseUrl, loanConsult]);
+
+  useEffect(
+    () => () => {
+      if (noticeTimerRef.current) clearTimeout(noticeTimerRef.current);
+    },
+    [],
+  );
 
   const handleLoanRequestFromCatalog = useCallback((ctx: Record<string, unknown>) => {
     const amount = Number(ctx.amount ?? 0);
@@ -131,11 +160,20 @@ export default function AsistenteScreen() {
       });
 
       if (res.status === 'ok') {
+        const loanId = res.loan?.id;
         await Promise.all([
           queryClient.invalidateQueries({ queryKey: ['liabilities', userId] }),
           queryClient.invalidateQueries({ queryKey: ['accounts', userId] }),
         ]);
         setPendingLoanRequest(null);
+        // Clear the consult conversation and panel so returning to Asistente
+        // shows the idle greeting, then open the new loan's own page.
+        loanConsult.reset();
+        setPanelState({ kind: 'idle' });
+        setMode('la-mesa');
+        if (loanId) {
+          router.push({ pathname: '/loan/[id]', params: { id: loanId } });
+        }
       } else if (__DEV__) {
         console.warn('[asistente] loan creation failed:', res.issues?.[0]);
       }
@@ -148,7 +186,11 @@ export default function AsistenteScreen() {
   };
 
   const submitText = async (text: string) => {
-    if (!text.trim() || !beginTurn()) return;
+    if (!text.trim()) return;
+    if (!beginTurn()) {
+      showNotice('Estoy terminando la respuesta anterior. Intenta de nuevo en un momento.');
+      return;
+    }
     setDraft('');
 
     // Check if user text triggers loan intent heuristic when in default mode
@@ -181,7 +223,7 @@ export default function AsistenteScreen() {
         if (response.surface_id) {
           setPanelState({ kind: 'surface', surfaceId: response.surface_id });
         }
-        if (response.audio_ref && catalogId === 'voz-color') {
+        if (response.audio_ref) {
           void playAudioAsset(response.audio_ref, baseUrl);
         }
       }
@@ -195,12 +237,23 @@ export default function AsistenteScreen() {
 
   const handleMicPressIn = async () => {
     isPressingMicRef.current = true;
-    if (useUiStore.getState().turnInFlight || speech.state !== 'idle') return;
+    if (useUiStore.getState().turnInFlight) {
+      isPressingMicRef.current = false;
+      showNotice('Estoy terminando la respuesta anterior. Intenta de nuevo en un momento.');
+      return;
+    }
+    if (speech.state !== 'idle') return;
+    if (!speech.isSupported) {
+      isPressingMicRef.current = false;
+      showNotice('El dictado de voz no está disponible en esta versión de la app.');
+      return;
+    }
     try {
       await speech.start();
       if (!isPressingMicRef.current) {
         const transcript = await speech.stop();
         if (transcript) void submitText(transcript);
+        else showNotice('No te escuché. Intenta de nuevo.');
       }
     } catch (error) {
       if (__DEV__) console.warn('[asistente] microphone start failed:', error);
@@ -209,10 +262,12 @@ export default function AsistenteScreen() {
 
   const handleMicPressOut = async () => {
     isPressingMicRef.current = false;
-    if (useUiStore.getState().turnInFlight) return;
+    // Always end recognition even if a background turn holds the lock — the
+    // transcript must be captured; only the *send* is gated by the lock.
     if (speech.isListening) {
       const transcript = await speech.stop();
       if (transcript) void submitText(transcript);
+      else showNotice('No te escuché. Intenta de nuevo.');
     }
   };
 
@@ -247,78 +302,52 @@ export default function AsistenteScreen() {
 
   // Greet proactively when the Asistente tab is opened without an explicit
   // intent — the bottom-nav tab and the Inicio banner both land here with none.
-  useFocusEffect(
-    useCallback(() => {
-      if (intent || !sessionId || panelState.kind !== 'idle') return;
-      if (greetedForSessionRef.current === sessionId) return;
-      if (!beginTurn()) return; // a user turn already claimed the conversation
-      greetedForSessionRef.current = sessionId;
-      let cancelled = false;
+  // The greeting is never cancelled by re-renders, and it marks the session
+  // greeted only on success, so a transient failure retries on the next focus.
+  const greetIfNeeded = useCallback(
+    async (sid: string) => {
+      if (intent || greetedForSessionRef.current === sid) return;
+      if (!beginTurn()) return; // a user turn already claimed the conversation; retry next focus
 
-      // Fallback for a backend that predates POST /api/agent/greeting: start the
-      // conversation with the existing /api/message turn instead of dead-ending.
-      const fallbackToMessage = async () => {
-        const response = await sendMessageResilient({ session_id: sessionId, text: 'Hola' });
-        if (cancelled) return;
-        if (Array.isArray(response.a2ui) && response.a2ui.length > 0) {
-          applyMessages(response.a2ui);
-        }
-        if (response.surface_id) {
-          setPanelState({ kind: 'surface', surfaceId: response.surface_id });
-        }
-        if (response.audio_ref && catalogId === 'voz-color') {
-          void playAudioAsset(response.audio_ref, baseUrl);
-        }
-      };
-
-      void (async () => {
-        try {
-          const greeting = await agentGreeting(sessionId);
-          if (cancelled) return;
-          if (Array.isArray(greeting.a2ui) && greeting.a2ui.length > 0) {
-            applyMessages(greeting.a2ui);
-          }
-          if (greeting.surface_id) {
-            setPanelState({ kind: 'surface', surfaceId: greeting.surface_id });
-          }
-          if (greeting.audio_ref && catalogId === 'voz-color') {
-            void playAudioAsset(greeting.audio_ref, baseUrl);
-          }
-        } catch (error) {
-          // The dedicated greeting route may not be deployed (404) or the
-          // backend may be unreachable (status 0): fall back to /api/message.
-          const missingEndpoint =
-            error instanceof ApiError && (error.status === 404 || error.status === 0);
-          if (!missingEndpoint) {
-            greetedForSessionRef.current = null; // allow a retry on next focus
-            if (__DEV__) console.warn('[asistente] greeting failed:', error);
-            return;
-          }
+      try {
+        const greeting = await agentGreeting(sid);
+        greetedForSessionRef.current = sid;
+        // The screen renders no text turns; the greeting is the spoken welcome.
+        if (greeting.audio_ref) void playAudioAsset(greeting.audio_ref, baseUrl);
+      } catch (error) {
+        // The dedicated greeting route may not be deployed (404) or the backend
+        // may be unreachable (status 0): fall back to the existing /api/message.
+        const missingEndpoint =
+          error instanceof ApiError && (error.status === 404 || error.status === 0);
+        if (!missingEndpoint) {
+          if (__DEV__) console.warn('[asistente] greeting failed:', error);
+        } else {
           try {
-            await fallbackToMessage();
+            const response = await sendMessageResilient({ session_id: sid, text: 'Hola' });
+            greetedForSessionRef.current = sid;
+            if (Array.isArray(response.a2ui) && response.a2ui.length > 0) {
+              applyMessages(response.a2ui);
+            }
+            if (response.surface_id) {
+              setPanelState({ kind: 'surface', surfaceId: response.surface_id });
+            }
+            if (response.audio_ref) void playAudioAsset(response.audio_ref, baseUrl);
           } catch (fallbackError) {
-            greetedForSessionRef.current = null;
             if (__DEV__) console.warn('[asistente] fallback greeting failed:', fallbackError);
           }
-        } finally {
-          endTurn();
         }
-      })();
+      } finally {
+        endTurn();
+      }
+    },
+    [intent, baseUrl, beginTurn, endTurn, applyMessages, sendMessageResilient],
+  );
 
-      return () => {
-        cancelled = true;
-      };
-    }, [
-      intent,
-      sessionId,
-      panelState.kind,
-      catalogId,
-      baseUrl,
-      applyMessages,
-      beginTurn,
-      endTurn,
-      sendMessageResilient,
-    ]),
+  useFocusEffect(
+    useCallback(() => {
+      if (!sessionId || intent || panelState.kind !== 'idle') return;
+      void greetIfNeeded(sessionId);
+    }, [sessionId, intent, panelState.kind, greetIfNeeded]),
   );
 
   const handleIdleSendText = () => {
@@ -348,6 +377,12 @@ export default function AsistenteScreen() {
       </View>
 
       <View style={styles.content}>
+        {notice ? (
+          <View style={styles.noticeBanner} pointerEvents="none">
+            <Text style={styles.noticeText}>{notice}</Text>
+          </View>
+        ) : null}
+
         {panelState.kind === 'surface' ? (
           <Animated.View
             key={panelState.surfaceId}
@@ -381,7 +416,7 @@ export default function AsistenteScreen() {
                     ? speech.partialText || 'Escuchando...'
                     : mode === 'loans'
                       ? 'Te ayudo a evaluar y solicitar tu nuevo crédito de manera transparente.'
-                      : 'Hola Daniela, soy Luna, tu asesora de crédito. Puedo ayudarte con tus dudas o reestructurar tus préstamos.'}
+                      : `${firstName ? `Hola ${firstName}, ` : 'Hola, '}soy Luna, tu asesora de crédito. Puedo ayudarte con tus dudas o reestructurar tus préstamos.`}
                 </Text>
               </View>
 
@@ -581,6 +616,26 @@ const styles = StyleSheet.create({
   },
 
   micWrapper: { alignItems: 'center', justifyContent: 'center' },
+
+  noticeBanner: {
+    position: 'absolute',
+    top: spacing.md,
+    left: spacing.xl,
+    right: spacing.xl,
+    zIndex: 10,
+    backgroundColor: colors.surface.card,
+    borderWidth: 1,
+    borderColor: colors.border.subtle,
+    borderRadius: radius.lg,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.lg,
+    shadowColor: '#000',
+    shadowOpacity: 0.12,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 4,
+  },
+  noticeText: { ...typography.caption, color: colors.text.secondary, textAlign: 'center' },
 
   idleHeaderSection: {
     alignItems: 'center',

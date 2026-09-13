@@ -11,6 +11,7 @@ type MonthRow = {
   interest?: number;
   totalBalance?: number;
   cash?: number;
+  balance?: number;
   balanceAfter?: number;
   creditor?: string;
 };
@@ -45,7 +46,7 @@ export function PlanTable({ node, scope }: A2UINodeProps) {
       <ScrollView style={styles.body}>
         {visible.map((row, index) => {
           const isBreak = row.month != null && row.month === breakMonth;
-          const balance = row.totalBalance ?? row.balanceAfter ?? row.cash;
+          const balance = row.totalBalance ?? row.balanceAfter ?? row.balance ?? row.cash;
           return (
             <View key={`${row.month ?? index}-${index}`} style={[styles.tr, isBreak && styles.trBreak]}>
               <Text style={[styles.td, styles.colMonth]}>

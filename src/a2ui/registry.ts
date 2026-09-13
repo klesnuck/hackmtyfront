@@ -45,7 +45,9 @@ export type BasicNodeType =
   | 'ForecastChart'
   | 'LineChart'
   | 'BreakAlert'
-  | 'LoanOffer';
+  | 'LoanOffer'
+  | 'LoanSummary'
+  | 'LiabilitySummary';
 
 
 export type CatalogRegistry = Record<BasicNodeType, ComponentType<A2UINodeProps>>;

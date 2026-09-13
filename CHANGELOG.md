@@ -318,7 +318,6 @@
 - impact: New OpenSpec change `fix-orb-native-canvaskit-bundle` (ADDED `mobile/assistant-orb` "Orb boots on native without the web CanvasKit bundle"). Web is unchanged (`public/canvaskit.wasm` still loaded before `OrbCanvas`). `npm run lint` still blocked by the pre-existing `unrs-resolver` native-binding failure.
 - follow_ups: Render on device needs a dev-client rebuild (Skia is a native dep; not Expo Go). Verify `npx expo export --platform ios|android` no longer resolves `fs`, and `--platform web` still loads CanvasKit.
 
-<<<<<<< HEAD
 ## [2026-09-13] change — full-panel generative assistant; voice STT reconciled; turn lock archived
 - agent: opencode / deepseek-flash (implementation delegated to a general sub-agent in parallel; spec reconciliation and archive performed in the main session)
 - requirements: `openspec/changes/archive/2026-09-13-replace-assistant-chat-with-fullscreen-generative-ui`, `.../2026-09-13-add-assistant-voice-transcription`, `.../2026-09-13-serialize-assistant-turns`; capabilities `mobile/assistant`, `mobile/a2ui-engine`, `mobile/voice`
@@ -328,7 +327,6 @@
 - rationale: The agent's generated UI must be the experience, not a chat thread, and old surfaces bound to stale data models must not linger. Reconciling voice-transcription prevents re-introducing the chat layout. The turn lock prevents overlapping requests per conversation.
 - impact: `tsc --noEmit` clean; `eslint` clean on touched files; `openspec validate --specs --strict` 6/6 green. The OpenSpec CLI could not move change directories into `openspec/changes/archive/` because the running Expo/Metro watcher holds the `openspec/changes` tree (Windows `EPERM` on directory rename); archives were done via copy+delete and the delta specs merged by hand (the archive workflow's agent-driven sync). Loan intake questions and the greeting text are now invisible by design (strict no-text).
 - follow_ups: Manual on-device checks remain unchecked (replace `5.2`; serialize `5.3`–`5.6`; voice `1.3`/`5.x`). `add-assistant-orb-screen` and `add-assistant-initial-greeting` still carry ADDED `mobile/assistant` requirements that assume inline chat / greeting text and must be reconciled before archiving. Floating orb + text pill + suggested prompts need a visual pass on device.
-=======
 ## [2026-09-13] change — one Préstamos list + personalized per-loan pages
 - agent: opencode / deepseek-flash
 - requirements: `openspec/changes/personalized-loans-and-list` (proposed); backend loan-detail/list endpoints
@@ -338,4 +336,33 @@
 - rationale: The list was reading liabilities, not loans, so it was empty. The detail page is lazy (backend creates once, hydrates with fresh data), so per-loan independent personalization costs one generation. Rendering with the backend-declared catalog lets a `simple` audience get voz-color even without an accessibility profile.
 - impact: New OpenSpec change `personalized-loans-and-list` (`mobile/loans-list`, `mobile/loan-detail` ADDED; `mobile/catalog-accessible` updated). `npm run typecheck` clean (no remaining errors). `npx @fission-ai/openspec validate --all` 23/23. `npm run lint` still blocked by the pre-existing `unrs-resolver` native-binding failure. Depends on the backend change.
 - follow_ups: Manual check: modal create → row appears → tap → personalized page; reopen re-hydrates; `u_don` gets the emoji/color page; private reason performs no research.
->>>>>>> c7392aa9b3fad9e4ea13a91038200e4db57c899e
+
+## [2026-09-13] fix — loan/liability detail pages: read-only summaries + Abonar
+- agent: opencode / deepseek-flash
+- requirements: `openspec/changes/personalized-loans-and-list` (proposed); backend per-credit detail endpoints
+- invariants: no A2UI wire change (additive components/action)
+- files: `src/a2ui/{registry,actionBus,context,renderer}.tsx`, `src/catalog/standard/{LoanSummary,LiabilitySummary,PlanTable,index}.tsx`, `src/catalog/voz-color/index.ts`, `src/api/{endpoints,types}.ts`, `app/loan/[id].tsx`, `app/liability/[id].tsx`, `app/(tabs)/prestamos.tsx`, `openspec/changes/personalized-loans-and-list/`
+- decision: (1) Added dedicated read-only catalog components `LoanSummary` and `LiabilitySummary` (registered in both catalogs) so a taken credit/active debt is shown as information, never as an offer; (2) the loan detail screen no longer plays audio (detail pages are TTS-free); (3) new `app/liability/[id].tsx` renders the personalized liability surface and wires the client-routed `abonar` action (via a new `onAbonar` on `A2UISurface`/actionBus) to the existing `AbonoModal`; after paying, the detail query is invalidated so the page re-hydrates with the new balance; (4) the Préstamos list routes liability rows to the new screen (loans already routed to `/loan/[id]`); (5) `PlanTable` now reads the `balance` field so the loan distribution table renders its Saldo column.
+- rationale: `LoanOffer` is an accept component, so it must never be used on an already-granted loan; the summaries give the detail pages a read-only visual. `abonar` is client-routed like `request_loan`, so it never hits `POST /api/action`.
+- impact: New capability `mobile/liability-detail` and extended `mobile/loan-detail` in `personalized-loans-and-list`. `npm run typecheck` clean; `npx @fission-ai/openspec validate --all` 23/23. `npm run lint` still blocked by the pre-existing `unrs-resolver` native-binding failure. Depends on the backend change.
+- follow_ups: Manual: tap a loan → no Aceptar, shows summary+distribution+risk; tap a liability → Abonar opens the modal and the balance refreshes; `u_don` gets the emoji/color layout.
+
+## [2026-09-13] fix — no more `//` URLs, reliable greeting, feedback + mic, audio for all
+- agent: opencode / deepseek-flash
+- requirements: `openspec/changes/fix-api-base-url-and-assistant-greeting` (proposed)
+- invariants: no A2UI wire change
+- files: `src/api/{baseUrl,client,endpoints}.ts`, `src/state/ui.store.ts`, `src/features/voice/useSpeechToText.ts`, `app/(tabs)/asistente.tsx`, `app.config.ts`, `eas.json`, `openspec/changes/fix-api-base-url-and-assistant-greeting/`
+- decision: (1) **Double-slash 404s**: the configured origin (a tunnel, possibly ending in `/`) was concatenated with `/api/...` in `client.ts` without trimming, so every `apiRequest` endpoint (message, greeting, profile, accounts, actions, payments) hit `host//api/...` and 404'd at the edge with no backend log; only the loans/audio paths trimmed. Fixed with one `src/api/baseUrl.ts::getApiBaseUrl()` that strips all trailing slashes, used by `client.ts`, `endpoints.ts`, and the Asistente screen; `app.config.ts` strips at build time too; `eas.json` value cleaned. (2) **Greeting reliability**: the greeting `useFocusEffect` marked the session greeted before the request and cancelled itself on any dep change/blur, so a cancelled greeting never retried; now `greetIfNeeded` marks the session greeted only on success and runs to completion. (3) **Watchdog + feedback**: `turnInFlight` records `turnStartedAt` and a 30 s watchdog force-releases a wedged lock; sends/mic while busy show a "terminando la respuesta anterior" bubble. (4) **Mic**: releasing always calls `speech.stop()` (even during a background turn); empty transcript → "no te escuché"; missing native STT module → "dictado no disponible". (5) **Audio for all**: removed the `catalogId === 'voz-color'` playback gates (backend now synthesizes for every user; see backend CHANGELOG).
+- rationale: A trailing slash in a tunnel origin must not silently disable the assistant. The greeting/lock/mic fixes remove the intermittent "it looks like it's sending but nothing happens" states without queueing turns (feedback + watchdog, per product choice).
+- impact: `npm run typecheck` clean; `npx @fission-ai/openspec validate --all` 24/24. `npm run lint` still blocked by the pre-existing `unrs-resolver` native-binding failure. Depends on the backend change for audio-for-all.
+- follow_ups: Manual: force a trailing-slash base and confirm no `//`; greeting once per session for every persona incl. blur/refocus; busy send feedback; mic always ends; standard user hears audio.
+
+## [2026-09-13] fix — named idle greeting + redirect to the new loan after confirming
+- agent: opencode / deepseek-flash
+- requirements: `openspec/changes/personalized-loans-and-list`, `openspec/changes/fix-api-base-url-and-assistant-greeting` (updated)
+- invariants: no A2UI wire change
+- files: `app/(tabs)/asistente.tsx`, `openspec/changes/{personalized-loans-and-list,fix-api-base-url-and-assistant-greeting,add-loans-consult-flow}/`
+- decision: (1) The idle subtitle hardcoded "Hola Daniela"; it now reads the session user's first name from the shared `['profile', userId]` query (already cached by the dashboard) and falls back to a generic greeting while loading/missing. (2) Confirming "Confirmar y recibir fondos" no longer just closes the modal: on success it invalidates liabilities/accounts, resets the loans consult state (`loanConsult.reset()`), returns the panel to idle (`panelState`/`mode`), and navigates to the newly created loan's personalized page (`/loan/[id]`). Also reconciled the stale `add-loans-consult-flow` a2ui-engine MODIFIED delta, which predated the turn-lock scenarios now in the deployed spec (it was failing `openspec validate`).
+- rationale: The greeting should address the actual user; and creating a loan should land the user on its detail page (the point of the per-loan UI), with the consult/panel cleared so returning shows the idle greeting.
+- impact: `npm run typecheck` clean; `npx @fission-ai/openspec validate --all` 23/23. `npm run lint` still blocked by the pre-existing `unrs-resolver` native-binding failure.
+- follow_ups: Manual: each persona shows its first name; confirming a loan opens `/loan/[id]`; returning to Asistente shows the idle panel.
