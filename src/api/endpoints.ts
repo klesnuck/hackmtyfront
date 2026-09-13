@@ -201,7 +201,7 @@ async function loansFetch(path: string, body: unknown): Promise<Response> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), LOANS_TIMEOUT_MS);
   try {
-    return await fetch(`${getApiBaseUrl()}${path}`, {
+    return await fetch(`${getApiBaseUrl()}/${path.replace(/^\/+/, '')}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),

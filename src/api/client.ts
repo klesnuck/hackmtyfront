@@ -38,7 +38,7 @@ export async function apiRequest<TResponse>(path: string, options: RequestOption
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
-    const response = await fetch(`${getApiBaseUrl()}${path}`, {
+    const response = await fetch(`${getApiBaseUrl()}/${path.replace(/^\/+/, '')}`, {
       method,
       headers: {
         'Content-Type': 'application/json',
