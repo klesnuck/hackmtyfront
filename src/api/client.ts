@@ -1,4 +1,4 @@
-import Constants from 'expo-constants';
+import { getApiBaseUrl } from './baseUrl';
 
 /**
  * The one place `fetch` is called from. Every REQ-API-* endpoint
@@ -8,13 +8,6 @@ import Constants from 'expo-constants';
  */
 
 const DEFAULT_TIMEOUT_MS = 15_000;
-
-function getBaseUrl(): string {
-  const fromConfig = Constants.expoConfig?.extra?.apiBaseUrl;
-  if (typeof fromConfig === 'string' && fromConfig.length > 0) return fromConfig;
-  if (__DEV__) console.warn('[api] EXPO_PUBLIC_API_BASE_URL not set — falling back to http://localhost:8000');
-  return 'http://localhost:8000';
-}
 
 function makeTraceId(): string {
   return `mobile-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
@@ -45,7 +38,7 @@ export async function apiRequest<TResponse>(path: string, options: RequestOption
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
-    const response = await fetch(`${getBaseUrl()}${path}`, {
+    const response = await fetch(`${getApiBaseUrl()}${path}`, {
       method,
       headers: {
         'Content-Type': 'application/json',

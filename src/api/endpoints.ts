@@ -71,9 +71,10 @@ export function getSurface(surfaceId: string): Promise<UiResponse> {
 export function getAudioAssetUrl(assetId: string, baseUrl: string): string {
   const ref = assetId.trim();
   if (ref.startsWith('http://') || ref.startsWith('https://')) return ref;
-  if (ref.startsWith('/')) return `${baseUrl.replace(/\/$/, '')}${ref}`;
+  const origin = (baseUrl || getApiBaseUrl()).replace(/\/+$/, '');
+  if (ref.startsWith('/')) return `${origin}${ref}`;
   const id = ref.startsWith('api/audio/') ? ref.slice('api/audio/'.length) : ref;
-  return `${baseUrl.replace(/\/$/, '')}/api/audio/${encodeURIComponent(id)}`;
+  return `${origin}/api/audio/${encodeURIComponent(id)}`;
 }
 
 // REQ-API-08
@@ -160,8 +161,8 @@ export function submitTransfer(request: TransferRequest): Promise<TransferRespon
 
 // --- Loans & Credits consult (API_KNOWLEDGE.md §6) ---
 
-import Constants from 'expo-constants';
 import { parseMultipartJsonPart } from './multipart';
+import { getApiBaseUrl } from './baseUrl';
 import type {
   LoanDetailResponse,
   LoanResponse,
@@ -172,14 +173,8 @@ import type {
   LoansListResponse,
 } from './types';
 
-/** The configured backend origin (no trailing slash). */
-export function getApiBaseUrl(): string {
-  const fromConfig = Constants.expoConfig?.extra?.apiBaseUrl;
-  if (typeof fromConfig === 'string' && fromConfig.length > 0) {
-    return fromConfig.replace(/\/$/, '');
-  }
-  return 'http://localhost:8000';
-}
+/** The configured backend origin, normalized (no trailing slash). Single source of truth. */
+export { getApiBaseUrl };
 
 /** Resolve a relative API path (e.g. `/api/audio/aud_…`) against the backend origin. */
 export function resolveApiUrl(pathOrUrl: string): string {
@@ -252,6 +247,16 @@ export function listLoans(userId: string): Promise<LoansListResponse> {
 export function getLoanDetail(loanId: string, userId: string): Promise<LoanDetailResponse> {
   return apiRequest<LoanDetailResponse>(
     `/api/loans/${encodeURIComponent(loanId)}/ui?user_id=${encodeURIComponent(userId)}`,
+  );
+}
+
+/** GET /api/liabilities/{liability_id}/ui — personalized per-liability A2UI page. */
+export function getLiabilityDetail(
+  liabilityId: string,
+  userId: string,
+): Promise<LoanDetailResponse> {
+  return apiRequest<LoanDetailResponse>(
+    `/api/liabilities/${encodeURIComponent(liabilityId)}/ui?user_id=${encodeURIComponent(userId)}`,
   );
 }
 

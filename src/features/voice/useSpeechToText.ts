@@ -212,5 +212,5 @@ export function useSpeechToText() {
     });
   }, [state, isNativeSupported, setRecordingFlag]);
 
-  return { state, isListening: state === 'listening', partialText, start, stop };
+  return { state, isListening: state === 'listening', partialText, start, stop, isSupported: isNativeSupported };
 }

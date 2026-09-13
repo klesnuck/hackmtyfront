@@ -44,7 +44,12 @@ search about that topic — unless private, in which case no online search runs.
 - `mobile/loans-list`: one list of created loans + active liabilities, with the
   manual application wired to the real create endpoint.
 - `mobile/loan-detail`: the personalized, lazily created + re-hydrated per-loan
-  A2UI page.
+  A2UI page. **Informational only** (the loan is already granted): never an offer,
+  no `LoanOffer`/`request_loan`, a read-only `LoanSummary`, purpose research,
+  payment distribution, and risk from the user's current behavior. No TTS.
+- `mobile/liability-detail`: the same lazy page for an active liability, built from
+  a read-only `LiabilitySummary` + payoff distribution + risk, with an `abonar`
+  action wired to the native payment flow. No research, no TTS.
 
 ### Modified Capabilities
 - `mobile/catalog-accessible`: `voz-color` Text/Card/Badge are tone/color-first,

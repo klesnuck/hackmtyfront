@@ -85,6 +85,8 @@ type A2UISurfaceProps = {
   catalogId?: CatalogId;
   /** Optional handler for client-routed `request_loan` action. */
   onLoanRequest?: (resolvedContext: Record<string, unknown>) => void;
+  /** Optional handler for the client-routed `abonar` action (liability detail). */
+  onAbonar?: (resolvedContext: Record<string, unknown>) => void;
 };
 
 /**
@@ -93,7 +95,7 @@ type A2UISurfaceProps = {
  * surface appears — the live assistant screen, and the read-only Kill Test
  * viewer (MOBILE_ARCHITECTURE.md §8).
  */
-export function A2UISurface({ surfaceId, catalogId, onLoanRequest }: A2UISurfaceProps) {
+export function A2UISurface({ surfaceId, catalogId, onLoanRequest, onAbonar }: A2UISurfaceProps) {
   const surface = useSurface(surfaceId);
   const activeCatalogId = useActiveCatalogId();
   if (!surface) return null;
@@ -106,6 +108,7 @@ export function A2UISurface({ surfaceId, catalogId, onLoanRequest }: A2UISurface
         dataModel: surface.dataModel,
         components: surface.components,
         onLoanRequest,
+        onAbonar,
       }}
     >
       <A2UINodeById id="root" />

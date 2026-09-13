@@ -29,3 +29,11 @@
 - [x] 5.2 `npm run typecheck` clean
 - [x] 5.3 `openspec validate` clean
 - [ ] 5.4 Manual: create via the modal → appears in the tab → tap → personalized page; reopen re-hydrates; `u_don` gets the emoji/color page, a private reason performs no research
+
+## 6. Informational detail (fix: taken loans were shown as offers)
+
+- [x] 6.1 Backend: strip `LoanOffer`/`request_loan` deterministically; require the summary component
+- [x] 6.2 Backend: recompute risk via `propose_offer` + distribution/payoff in the detail context
+- [x] 6.3 Backend: `liability_detail` domain + `GET /api/liabilities/{id}/ui` + `abonar` action
+- [x] 6.4 Backend: no speech/`audio_ref` for detail domains
+- [x] 6.5 Frontend: `LoanSummary` + `LiabilitySummary`; route `abonar`; `app/liability/[id].tsx`; no TTS
