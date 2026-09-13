@@ -80,6 +80,10 @@ export default function AsistenteScreen() {
   const inputBlocked = isSending || isRecording;
 
   useEffect(() => {
+    if (__DEV__) console.log('[asistente] apiBaseUrl in use:', baseUrl);
+  }, [baseUrl]);
+
+  useEffect(() => {
     loanConsult.setBaseUrl(baseUrl);
   }, [baseUrl, loanConsult]);
 

@@ -43,8 +43,19 @@ export function login(request: LoginRequest): Promise<LoginResponse> {
 }
 
 // REQ-API-02
+// The agent can chain up to 12 sequential model calls per turn (tool use loop,
+// amitie/backend/agent/service.py) — observed turns take 20-40s+. The client
+// default (15s, src/api/client.ts) is tuned for plain CRUD calls and aborts
+// well before the backend finishes, which iOS/Expo then reports as a
+// misleading native error instead of a clean timeout.
+const AGENT_MESSAGE_TIMEOUT_MS = 60_000;
+
 export function sendMessage(request: MessageRequest): Promise<SurfaceResponse> {
-  return apiRequest<SurfaceResponse>('api/message', { method: 'POST', body: request });
+  return apiRequest<SurfaceResponse>('api/message', {
+    method: 'POST',
+    body: request,
+    timeoutMs: AGENT_MESSAGE_TIMEOUT_MS,
+  });
 }
 
 // REQ-API-12 — deterministic spoken greeting for the Asistente tab (no LLM).
@@ -213,7 +224,7 @@ async function loansFetch(path: string, body: unknown): Promise<Response> {
 
 /** POST /api/loans/greeting — multipart response (payload JSON + optional audio). */
 export async function loansGreeting(userId: string): Promise<LoansGreetingPayload> {
-  const response = await loansFetch('/api/loans/greeting', { user_id: userId });
+  const response = await loansFetch('api/loans/greeting', { user_id: userId });
   if (!response.ok) {
     throw new Error(`loansGreeting failed: ${response.status}`);
   }
@@ -224,7 +235,7 @@ export async function loansGreeting(userId: string): Promise<LoansGreetingPayloa
 
 /** POST /api/loans/consult — multipart response (payload JSON + optional audio). */
 export async function loansConsult(request: LoansConsultRequest): Promise<LoansConsultPayload> {
-  const response = await loansFetch('/api/loans/consult', request);
+  const response = await loansFetch('api/loans/consult', request);
   if (!response.ok) {
     throw new Error(`loansConsult failed: ${response.status}`);
   }
@@ -251,7 +262,7 @@ export function listLoans(userId: string): Promise<LoansListResponse> {
 /** GET /api/loans/{loan_id}/ui — personalized per-loan A2UI page (create-or-hydrate). */
 export function getLoanDetail(loanId: string, userId: string): Promise<LoanDetailResponse> {
   return apiRequest<LoanDetailResponse>(
-    `/api/loans/${encodeURIComponent(loanId)}/ui?user_id=${encodeURIComponent(userId)}`,
+    `api/loans/${encodeURIComponent(loanId)}/ui?user_id=${encodeURIComponent(userId)}`,
   );
 }
 
