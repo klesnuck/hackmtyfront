@@ -19,7 +19,18 @@ const ORB_SIZE = 200;
 const HALO_SIZE = ORB_SIZE * 1.6;
 const GLOW_COLOR = '#AEB9D8';
 
+// Floating variant: ~42% of the idle box, pinned bottom-right by the assistant
+// screen. The particle internals are unchanged; only this outer box/scale is.
+const FLOATING_SCALE = 0.42;
+
+type OrbVariant = 'idle' | 'floating';
+
 type OrbCanvasComponent = React.ComponentType<{ isListening?: boolean }>;
+
+type AnimatedOrbProps = {
+  isListening?: boolean;
+  variant?: OrbVariant;
+};
 
 /**
  * Platform entry point for the assistant orb. Delegates to `OrbCanvas`
@@ -42,7 +53,7 @@ type OrbCanvasComponent = React.ComponentType<{ isListening?: boolean }>;
  * listening. Kept outside `OrbCanvas`/Skia since it's simple, cheap, and
  * shows immediately even while the Skia canvas is still loading on web.
  */
-export function AnimatedOrb({ isListening = false }: { isListening?: boolean }) {
+export function AnimatedOrb({ isListening = false, variant = 'idle' }: AnimatedOrbProps) {
   const [OrbCanvas, setOrbCanvas] = useState<OrbCanvasComponent | null>(null);
   const breath = useSharedValue(0);
 
@@ -78,31 +89,41 @@ export function AnimatedOrb({ isListening = false }: { isListening?: boolean }) 
     };
   });
 
-  return (
-    <View style={styles.container} pointerEvents="none">
-      <Animated.View style={[styles.halo, haloStyle]}>
-        <Svg width={HALO_SIZE} height={HALO_SIZE}>
-          <Defs>
-            <RadialGradient id="orbHalo" cx="50%" cy="50%" r="50%">
-              <Stop offset="0%" stopColor="#F5F8FF" stopOpacity={0.95} />
-              <Stop offset="22%" stopColor={GLOW_COLOR} stopOpacity={0.75} />
-              <Stop offset="55%" stopColor={GLOW_COLOR} stopOpacity={0.32} />
-              <Stop offset="100%" stopColor={GLOW_COLOR} stopOpacity={0} />
-            </RadialGradient>
-          </Defs>
-          <Circle cx={HALO_SIZE / 2} cy={HALO_SIZE / 2} r={HALO_SIZE / 2} fill="url(#orbHalo)" />
-        </Svg>
-      </Animated.View>
+  const scale = variant === 'floating' ? FLOATING_SCALE : 1;
+  const boxSize = HALO_SIZE * scale;
 
-      {OrbCanvas ? <OrbCanvas isListening={isListening} /> : <View style={styles.placeholder} />}
+  return (
+    <View
+      style={[styles.container, { width: boxSize, height: boxSize }]}
+      pointerEvents="none"
+    >
+      <View style={[styles.inner, { width: HALO_SIZE, height: HALO_SIZE, transform: [{ scale }] }]}>
+        <Animated.View style={[styles.halo, haloStyle]}>
+          <Svg width={HALO_SIZE} height={HALO_SIZE}>
+            <Defs>
+              <RadialGradient id="orbHalo" cx="50%" cy="50%" r="50%">
+                <Stop offset="0%" stopColor="#F5F8FF" stopOpacity={0.95} />
+                <Stop offset="22%" stopColor={GLOW_COLOR} stopOpacity={0.75} />
+                <Stop offset="55%" stopColor={GLOW_COLOR} stopOpacity={0.32} />
+                <Stop offset="100%" stopColor={GLOW_COLOR} stopOpacity={0} />
+              </RadialGradient>
+            </Defs>
+            <Circle cx={HALO_SIZE / 2} cy={HALO_SIZE / 2} r={HALO_SIZE / 2} fill="url(#orbHalo)" />
+          </Svg>
+        </Animated.View>
+
+        {OrbCanvas ? <OrbCanvas isListening={isListening} /> : <View style={styles.placeholder} />}
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    width: HALO_SIZE,
-    height: HALO_SIZE,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  inner: {
     alignItems: 'center',
     justifyContent: 'center',
   },
