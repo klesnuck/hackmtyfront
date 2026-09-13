@@ -13,9 +13,14 @@ import { Tabs } from '../standard/Tabs';
 import { TextField } from '../standard/TextField';
 import { Video } from '../standard/Video';
 import { Badge } from '../standard/Badge';
+import { BreakAlert } from '../standard/BreakAlert';
+import { ForecastChart } from '../standard/ForecastChart';
 import { Heading } from '../standard/Heading';
+import { LineChart } from '../standard/LineChart';
 import { LoanOffer } from '../standard/LoanOffer';
+import { PlanTable } from '../standard/PlanTable';
 import { ProgressBar } from '../standard/ProgressBar';
+import { ScenarioComparison } from '../standard/ScenarioComparison';
 import { Button } from './Button';
 import { Text } from './Text';
 
@@ -55,6 +60,11 @@ const vozColorCatalog: CatalogRegistry = {
   Badge,
   ProgressBar,
   LoanOffer,
+  ScenarioComparison,
+  PlanTable,
+  ForecastChart,
+  LineChart,
+  BreakAlert,
 };
 
 

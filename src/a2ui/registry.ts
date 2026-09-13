@@ -40,6 +40,11 @@ export type BasicNodeType =
   | 'Heading'
   | 'Badge'
   | 'ProgressBar'
+  | 'ScenarioComparison'
+  | 'PlanTable'
+  | 'ForecastChart'
+  | 'LineChart'
+  | 'BreakAlert'
   | 'LoanOffer';
 
 

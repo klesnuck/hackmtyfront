@@ -43,7 +43,10 @@ export function LoanOffer({ node, scope }: A2UINodeProps) {
   const risk = (loanData.risk as LoanRisk | undefined);
   const warnings = (loanData.warnings as string[] | undefined) ?? [];
 
+  const canAccept = amount > 0;
+
   const handleAccept = () => {
+    if (!canAccept) return;
     // Dispatches request_loan action with the offer terms
     dispatchAction({
       amount,
@@ -178,16 +181,24 @@ export function LoanOffer({ node, scope }: A2UINodeProps) {
       )}
 
       {/* Action Buttons */}
-      <View style={styles.actionsRow}>
-        <AnimatedPressable style={styles.acceptButton} onPress={handleAccept}>
-          <Ionicons name="checkmark-circle" size={20} color={colors.text.onBrand} />
-          <Text style={styles.acceptButtonText}>Aceptar préstamo</Text>
-        </AnimatedPressable>
+      {canAccept ? (
+        <View style={styles.actionsRow}>
+          <AnimatedPressable style={styles.acceptButton} onPress={handleAccept}>
+            <Ionicons name="checkmark-circle" size={20} color={colors.text.onBrand} />
+            <Text style={styles.acceptButtonText}>Aceptar préstamo</Text>
+          </AnimatedPressable>
 
-        <AnimatedPressable style={styles.declineButton} onPress={handleDecline}>
-          <Text style={styles.declineButtonText}>Declinar</Text>
-        </AnimatedPressable>
-      </View>
+          <AnimatedPressable style={styles.declineButton} onPress={handleDecline}>
+            <Text style={styles.declineButtonText}>Declinar</Text>
+          </AnimatedPressable>
+        </View>
+      ) : (
+        <View style={styles.actionsRow}>
+          <AnimatedPressable style={styles.declineButton} onPress={handleDecline}>
+            <Text style={styles.declineButtonText}>Entendido</Text>
+          </AnimatedPressable>
+        </View>
+      )}
     </View>
   );
 }
