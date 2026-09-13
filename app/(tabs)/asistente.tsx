@@ -18,7 +18,8 @@ import {
 import Animated, { FadeInUp } from 'react-native-reanimated';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { A2UISurface, useA2UIStore } from '../../src/a2ui';
-import { createLoan, sendMessage } from '../../src/api/endpoints';
+import { ApiError } from '../../src/api/client';
+import { agentGreeting, createLoan, sendMessage } from '../../src/api/endpoints';
 import { AnimatedPressable } from '../../src/catalog/shared/AnimatedPressable';
 import { AnimatedOrb } from '../../src/features/assistant-orb/AnimatedOrb';
 import { detectsLoanIntent } from '../../src/features/loans/detectsLoanIntent';
@@ -27,6 +28,7 @@ import { playAudioAsset } from '../../src/features/voice/audioCache';
 import { RecordingPulse } from '../../src/features/voice/RecordingPulse';
 import { useSpeechToText } from '../../src/features/voice/useSpeechToText';
 import { useActiveCatalogId, useSessionStore } from '../../src/state/session.store';
+import { useUiStore } from '../../src/state/ui.store';
 import { colors, radius, spacing, typography } from '../../src/theme/tokens';
 
 type Turn =
@@ -53,6 +55,9 @@ export default function AsistenteScreen() {
   const userId = useSessionStore((s) => s.userId);
   const catalogId = useActiveCatalogId();
   const applyMessages = useA2UIStore((s) => s.applyMessages);
+  const isSending = useUiStore((s) => s.turnInFlight);
+  const beginTurn = useUiStore((s) => s.beginTurn);
+  const endTurn = useUiStore((s) => s.endTurn);
   const speech = useSpeechToText();
   const loanConsult = useLoanConsult();
   const queryClient = useQueryClient();
@@ -60,7 +65,6 @@ export default function AsistenteScreen() {
   const [mode, setMode] = useState<'la-mesa' | 'loans'>('la-mesa');
   const [turns, setTurns] = useState<Turn[]>([]);
   const [draft, setDraft] = useState('');
-  const [isSending, setIsSending] = useState(false);
   const [manualActive, setManualActive] = useState(false);
   const [pendingLoanRequest, setPendingLoanRequest] = useState<{ amount: number; months?: number } | null>(null);
   const [isConfirmingLoan, setIsConfirmingLoan] = useState(false);
@@ -69,11 +73,14 @@ export default function AsistenteScreen() {
   const textInputRef = useRef<TextInput>(null);
   const focusDraftOnActive = useRef(false);
   const hasSentInitialIntent = useRef(false);
+  const greetedForSessionRef = useRef<string | null>(null);
   const isPressingMicRef = useRef(false);
 
   const baseUrl = (Constants.expoConfig?.extra?.apiBaseUrl as string | undefined) ?? '';
   const hasIntentPrompt = Boolean(intent && INTENT_PROMPTS[intent]);
   const isActive = turns.length > 0 || manualActive || hasIntentPrompt;
+  const isRecording = speech.state !== 'idle';
+  const inputBlocked = isSending || isRecording;
 
   useEffect(() => {
     loanConsult.setBaseUrl(baseUrl);
@@ -96,7 +103,7 @@ export default function AsistenteScreen() {
   }, []);
 
   const handleConfirmLoan = async () => {
-    if (!pendingLoanRequest || !userId) return;
+    if (!pendingLoanRequest || !userId || !beginTurn()) return;
     setIsConfirmingLoan(true);
     try {
       const res = await createLoan({
@@ -129,12 +136,12 @@ export default function AsistenteScreen() {
       });
     } finally {
       setIsConfirmingLoan(false);
+      endTurn();
     }
   };
 
   const submitText = async (text: string, { showUserBubble = true }: { showUserBubble?: boolean } = {}) => {
-    if (!text.trim() || isSending) return;
-    setIsSending(true);
+    if (!text.trim() || !beginTurn()) return;
     if (showUserBubble) {
       appendTurn({ id: `user-${Date.now()}`, role: 'user', text });
     }
@@ -193,13 +200,13 @@ export default function AsistenteScreen() {
         text: 'No pude conectar con el asistente. Intenta de nuevo.',
       });
     } finally {
-      setIsSending(false);
+      endTurn();
     }
   };
 
   const handleMicPressIn = async () => {
     isPressingMicRef.current = true;
-    if (speech.state !== 'idle') return;
+    if (useUiStore.getState().turnInFlight || speech.state !== 'idle') return;
     try {
       await speech.start();
       if (!isPressingMicRef.current) {
@@ -213,6 +220,7 @@ export default function AsistenteScreen() {
 
   const handleMicPressOut = async () => {
     isPressingMicRef.current = false;
+    if (useUiStore.getState().turnInFlight) return;
     if (speech.isListening) {
       const transcript = await speech.stop();
       if (transcript) void submitText(transcript, { showUserBubble: false });
@@ -222,16 +230,18 @@ export default function AsistenteScreen() {
   /* eslint-disable react-hooks/set-state-in-effect, react-hooks/exhaustive-deps */
   useEffect(() => {
     if (hasSentInitialIntent.current) return;
-    hasSentInitialIntent.current = true;
+    if (!sessionId) return; // wait for the persisted session before deciding
 
     if (intent === 'prestamo-nuevo') {
+      if (!beginTurn()) return;
+      hasSentInitialIntent.current = true;
       setMode('loans');
-      setIsSending(true);
-      // Greet immediately on entry — don't gate on `userId` being hydrated
-      // yet (session.store loads it async and starts at null), matching the
-      // 'u_ana' fallback submitText already uses for the same call.
+      if (!userId) {
+        endTurn();
+        return;
+      }
       void loanConsult
-        .greet(userId ?? 'u_ana')
+        .greet(userId)
         .then((res) => {
           if (res.response_text) {
             appendTurn({ id: `system-${Date.now()}`, role: 'system', text: res.response_text });
@@ -244,14 +254,85 @@ export default function AsistenteScreen() {
             text: 'No pude iniciar la consulta de préstamos.',
           });
         })
-        .finally(() => setIsSending(false));
+        .finally(() => endTurn());
       return;
     }
 
     const prompt = intent ? INTENT_PROMPTS[intent] : undefined;
-    if (prompt && sessionId) void submitText(prompt);
+    if (!prompt) return; // plain tab open: greeted by the focus effect below
+    hasSentInitialIntent.current = true;
+    void submitText(prompt);
   }, [intent, sessionId, userId]);
   /* eslint-enable react-hooks/set-state-in-effect, react-hooks/exhaustive-deps */
+
+  // Greet proactively when the Asistente tab is opened without an explicit
+  // intent — the bottom-nav tab and the Inicio banner both land here with none.
+  useFocusEffect(
+    useCallback(() => {
+      if (intent || !sessionId || turns.length > 0) return;
+      if (greetedForSessionRef.current === sessionId) return;
+      if (!beginTurn()) return; // a user turn already claimed the conversation
+      greetedForSessionRef.current = sessionId;
+      let cancelled = false;
+
+      // Fallback for a backend that predates POST /api/agent/greeting: start the
+      // conversation with the existing /api/message turn instead of dead-ending.
+      const fallbackToMessage = async () => {
+        const response = await sendMessage({ session_id: sessionId, text: 'Hola' });
+        if (cancelled) return;
+        if (Array.isArray(response.a2ui) && response.a2ui.length > 0) {
+          applyMessages(response.a2ui);
+        }
+        if (response.surface_id) {
+          setTurns((prev) => [
+            ...prev,
+            { id: `agent-${Date.now()}`, role: 'agent', surfaceId: response.surface_id },
+          ]);
+        }
+        if (response.audio_ref && catalogId === 'voz-color') {
+          void playAudioAsset(response.audio_ref, baseUrl);
+        }
+      };
+
+      void (async () => {
+        try {
+          const greeting = await agentGreeting(sessionId);
+          if (cancelled) return;
+          if (greeting.assistant_text) {
+            setTurns((prev) => [
+              ...prev,
+              { id: `system-${Date.now()}`, role: 'system', text: greeting.assistant_text },
+            ]);
+          }
+          if (greeting.audio_ref && catalogId === 'voz-color') {
+            void playAudioAsset(greeting.audio_ref, baseUrl);
+          }
+        } catch (error) {
+          // The dedicated greeting route may not be deployed (404) or the
+          // backend may be unreachable (status 0): fall back to /api/message.
+          const missingEndpoint =
+            error instanceof ApiError && (error.status === 404 || error.status === 0);
+          if (!missingEndpoint) {
+            greetedForSessionRef.current = null; // allow a retry on next focus
+            if (__DEV__) console.warn('[asistente] greeting failed:', error);
+            return;
+          }
+          try {
+            await fallbackToMessage();
+          } catch (fallbackError) {
+            greetedForSessionRef.current = null;
+            if (__DEV__) console.warn('[asistente] fallback greeting failed:', fallbackError);
+          }
+        } finally {
+          endTurn();
+        }
+      })();
+
+      return () => {
+        cancelled = true;
+      };
+    }, [intent, sessionId, turns.length, catalogId, baseUrl, beginTurn, endTurn]),
+  );
 
   useEffect(() => {
     listRef.current?.scrollToEnd({ animated: true });
@@ -266,7 +347,7 @@ export default function AsistenteScreen() {
   }, [isActive]);
 
   const handleIdleSendText = () => {
-    if (!draft.trim()) return;
+    if (!draft.trim() || inputBlocked) return;
     void submitText(draft);
   };
 
@@ -296,7 +377,7 @@ export default function AsistenteScreen() {
                 ? speech.partialText || 'Escuchando...'
                 : mode === 'loans'
                   ? 'Te ayudo a evaluar y solicitar tu nuevo crédito de manera transparente.'
-                  : 'Hola Daniela, soy tu asesor de crédito. Puedo ayudarte con tus dudas o reestructurar tus préstamos.'}
+                  : 'Hola Daniela, soy Luna, tu asesora de crédito. Puedo ayudarte con tus dudas o reestructurar tus préstamos.'}
             </Text>
           </View>
 
@@ -306,7 +387,9 @@ export default function AsistenteScreen() {
               style={[styles.bigMicButton, speech.isListening && styles.bigMicButtonActive]}
               onPressIn={handleMicPressIn}
               onPressOut={handleMicPressOut}
-              disabled={speech.state === 'requesting-permission' || speech.state === 'processing'}
+              disabled={
+                isSending || speech.state === 'requesting-permission' || speech.state === 'processing'
+              }
             >
               <Ionicons name={speech.isListening ? 'stop' : 'mic'} size={36} color="#fff" />
             </AnimatedPressable>
@@ -320,16 +403,24 @@ export default function AsistenteScreen() {
               onChangeText={setDraft}
               placeholder="Escribe aquí..."
               placeholderTextColor={colors.text.placeholder}
-              editable={!speech.isListening}
+              editable={!inputBlocked}
               onSubmitEditing={handleIdleSendText}
               returnKeyType="send"
             />
-            <Pressable onPress={handleIdleSendText} disabled={!draft.trim() || isSending} style={styles.idleSendIcon}>
-              <Ionicons
-                name="arrow-up-circle"
-                size={32}
-                color={draft.trim() && !isSending ? colors.brand.primary : colors.text.placeholder}
-              />
+            <Pressable
+              onPress={handleIdleSendText}
+              disabled={!draft.trim() || inputBlocked}
+              style={styles.idleSendIcon}
+            >
+              {isSending ? (
+                <ActivityIndicator color={colors.brand.primary} />
+              ) : (
+                <Ionicons
+                  name="arrow-up-circle"
+                  size={32}
+                  color={draft.trim() && !inputBlocked ? colors.brand.primary : colors.text.placeholder}
+                />
+              )}
             </Pressable>
           </View>
         </View>

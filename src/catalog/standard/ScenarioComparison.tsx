@@ -11,6 +11,7 @@ type ScenarioRow = {
   totalInterest?: number;
   interestSaved?: number;
   monthsSaved?: number;
+  note?: string;
 };
 
 function money(value: unknown): string {
@@ -40,16 +41,23 @@ export function ScenarioComparison({ node, scope }: A2UINodeProps) {
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
         {scenarios.map((scenario, index) => {
           const highlighted = index === highlightIndex;
+          const label = scenario.label ?? `Escenario ${index + 1}`;
+          // Loan-term cards label themselves by term ("12 meses"), so the generic
+          // "Plazo" row would just repeat the title.
+          const isTermLabel = /^\s*\d+\s*meses?\s*$/i.test(label);
           return (
             <View key={index} style={[styles.card, highlighted && styles.cardHighlighted]}>
-              <Text style={[styles.label, highlighted && styles.labelHighlighted]}>
-                {scenario.label ?? `Escenario ${index + 1}`}
-              </Text>
+              {highlighted && isTermLabel ? (
+                <Text style={styles.recommendedTag}>Recomendado</Text>
+              ) : null}
+              <Text style={[styles.label, highlighted && styles.labelHighlighted]}>{label}</Text>
               <Text style={styles.payment}>{money(scenario.monthlyPayment)}/mes</Text>
-              <View style={styles.metricRow}>
-                <Text style={styles.metricLabel}>Plazo</Text>
-                <Text style={styles.metricValue}>{months(scenario.payoffMonths)}</Text>
-              </View>
+              {!isTermLabel ? (
+                <View style={styles.metricRow}>
+                  <Text style={styles.metricLabel}>Plazo</Text>
+                  <Text style={styles.metricValue}>{months(scenario.payoffMonths)}</Text>
+                </View>
+              ) : null}
               <View style={styles.metricRow}>
                 <Text style={styles.metricLabel}>Interés total</Text>
                 <Text style={styles.metricValue}>{money(scenario.totalInterest)}</Text>
@@ -66,6 +74,7 @@ export function ScenarioComparison({ node, scope }: A2UINodeProps) {
                   <Text style={styles.metricSaved}>{months(scenario.monthsSaved)}</Text>
                 </View>
               ) : null}
+              {scenario.note ? <Text style={styles.note}>{scenario.note}</Text> : null}
             </View>
           );
         })}
@@ -88,6 +97,16 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   cardHighlighted: { borderColor: colors.brand.primary, borderWidth: 2 },
+  recommendedTag: {
+    ...typography.caption,
+    alignSelf: 'flex-start',
+    color: colors.text.onBrand,
+    backgroundColor: colors.brand.primary,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 2,
+    borderRadius: radius.pill,
+    fontWeight: '700',
+  },
   label: { ...typography.caption, color: colors.text.secondary, fontWeight: '700' },
   labelHighlighted: { color: colors.brand.primary },
   payment: { ...typography.h3, color: colors.text.primary },
@@ -95,4 +114,12 @@ const styles = StyleSheet.create({
   metricLabel: { ...typography.caption, color: colors.text.secondary },
   metricValue: { ...typography.caption, color: colors.text.primary, fontWeight: '600' },
   metricSaved: { ...typography.caption, color: colors.text.success, fontWeight: '700' },
+  note: {
+    ...typography.caption,
+    color: colors.text.secondary,
+    fontStyle: 'italic',
+    borderTopWidth: 1,
+    borderTopColor: colors.border.subtle,
+    paddingTop: spacing.xs,
+  },
 });

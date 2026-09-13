@@ -12,7 +12,7 @@ The system SHALL show a red header with a time-of-day greeting, the user's displ
 - **THEN** the header shows "Hola, buen día" (or an appropriate time-of-day variant) followed by the user's name, and an avatar with their initials
 
 ### Requirement: AI banner promotes the assistant and routes to the intent picker
-The system SHALL show a dark promotional card ("Asistente de Préstamos IA") with a tap target that navigates to `app/asistente-prestamos.tsx` — the existing La Mesa / Saving Bags intent-picker screen (repurposed, see `design.md`'s "Repurposing decision") — not the Soporte IA tab directly. That screen hands the user off to the assistant with a specific intent already attached.
+The system SHALL show a dark promotional card ("Asistente de Préstamos") with a tap target that navigates to `app/asistente-prestamos.tsx` — the existing La Mesa / Saving Bags intent-picker screen (repurposed, see `design.md`'s "Repurposing decision") — not the Soporte IA tab directly. That screen hands the user off to the assistant with a specific intent already attached.
 
 #### Scenario: Tapping the AI banner
 - **WHEN** the user taps the AI banner's arrow affordance

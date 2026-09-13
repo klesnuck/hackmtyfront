@@ -25,11 +25,11 @@ already an intermediate routing panel: two cards (La Mesa / Saving Bags) that
 each push to the assistant with a specific `intent` param, plus a general
 "Habla con tu asistente" CTA. Its job doesn't change; only how it's reached
 does. Instead of retiring it, it becomes the destination of the new
-dashboard's "Asistente de Préstamos IA" banner (§3), replacing the originally
+dashboard's "Asistente de Préstamos" banner (§3), replacing the originally
 planned direct route to the Soporte IA tab — this screen's whole purpose is
 narrowing down which specific thing the user wants before handing off to the
 agent with that intent already attached, which is a better fit for a button
-literally named "Asistente de Préstamos IA" than dropping the user into the
+literally named "Asistente de Préstamos" than dropping the user into the
 general orb/chat idle screen.
 
 Mechanically: its content moves, unchanged, to `app/asistente-prestamos.tsx`

@@ -145,7 +145,7 @@ export default function InicioScreen() {
                 <Ionicons name="sparkles" size={16} color={accent.transferBlue} />
                 <Text style={styles.bannerEyebrow}>Asistente Inteligente</Text>
               </View>
-              <Text style={styles.bannerTitle}>Asistente de Préstamos IA</Text>
+              <Text style={styles.bannerTitle}>Asistente de Préstamos</Text>
               <Text style={styles.bannerSubtitle}>
                 Simula y autoriza tu préstamo ideal con ayuda de nuestra IA.
               </Text>

@@ -227,3 +227,63 @@
 - rationale: The extension mismatch is a hard decode failure on iOS and the missing audio session is a silent-mute failure; both are required for audible TTS. Keeping the change minimal avoided replacing the download layer before confirming the root cause.
 - impact: `openspec/changes/fix-ios-audio-playback/` modified `mobile/voice` (cache format) and added two requirements (playback audio session; observable failures). Not run locally: this environment has no `node` binary, so `npm run typecheck`/`npm run lint` and the iOS checks in `tasks.md` §5 must be run by the user.
 - follow_ups: Run `npm run typecheck`/`lint` and iOS verification (silent switch on/off, after a mic turn, accessible auto-play). If audio still fails, apply the documented provider refactor. `openspec validate fix-ios-audio-playback` must be run by the user (CLI not installed here).
+
+## [2026-09-13] feature — Asistente greets on open (backend `/api/agent/greeting`)
+- agent: opencode / deepseek-flash
+- requirements: `openspec/changes/add-assistant-initial-greeting` (proposed); backend REQ-API-12
+- invariants: none changed (HTTP-only preserved)
+- files: `src/api/types.ts`, `src/api/endpoints.ts`, `app/(tabs)/asistente.tsx`, `src/features/voice/audioCache.ts`, `openspec/changes/add-assistant-initial-greeting/`
+- decision: The tab never started a turn on open — the only initial-turn logic required an `intent` route param, and both the bottom-nav tab and the Inicio banner open it with none, so no `POST` was made and the assistant never spoke first. When the first turn did happen (via the mic), the active speech-recognition audio session blocked the reply's TTS. Added `agentGreeting(sessionId)` calling the new backend `POST /api/agent/greeting`, and a focus effect that greets once per `sessionId` when there is no intent and no conversation, rendering `assistant_text` and auto-playing `audio_ref` for `voz-color`. Also fixed the one-shot `hasSentInitialIntent` guard, which was consumed before `sessionId` was available and could permanently swallow the initial turn. `audioCache.playAudioAsset` now retries the `.playback` session switch once, for the recognized-then-reply timing.
+- rationale: A deterministic backend greeting (mirrors `/api/loans/greeting`) is faster and more reliable than pushing a synthetic user message through the agent, and the greeting fires before any mic use so it is audible.
+- impact: New OpenSpec change `add-assistant-initial-greeting` (adds the greeting requirement to `mobile/assistant`); playback-audibility remains owned by `fix-ios-audio-playback` to avoid duplicating the `mobile/voice` delta. Backend suite 202 tests passing. Not run locally: no `node` binary, so `npm run typecheck`/`lint` and the iOS checks in `tasks.md` §3 are the user's.
+- follow_ups: Run typecheck/lint and the manual checks; apply/archive alongside the pending `add-assistant-orb-screen` (which owns the idle-screen layout the greeting now appears in).
+
+## [2026-09-13] fix — Asistente greeting falls back when /api/agent/greeting is unavailable
+- agent: opencode / deepseek-flash
+- requirements: `openspec/changes/add-assistant-initial-greeting` (updated)
+- invariants: none changed
+- files: `app/(tabs)/asistente.tsx`, `API_KNOWLEDGE.md`, `openspec/changes/add-assistant-initial-greeting/`
+- decision: A real-environment run showed `POST /api/agent/greeting → 404` while the backend source registers the route, i.e. the serving process predated the new router (or was a different build). The user chose to keep the new endpoint. Kept the endpoint as the normal path, fixed nothing in the route, and made the client resilient: if the greeting request fails with `404` (route missing) or status `0` (unreachable), the tab now starts the conversation through the existing `POST /api/message` (`text: 'Hola'`) instead of dead-ending; other failures leave the greeting retryable on the next focus. Also synced the frontend `API_KNOWLEDGE.md` copy, which was missing `/api/agent/greeting`.
+- rationale: `keep the new endpoint` means the 404 is a deployment problem, not a contract change — so the code fix is a graceful degradation plus documentation, not a path swap. This removes the dead-tab failure mode regardless of backend version.
+- impact: No backend change (route already registered; verified in `openapi()` and by `tests/test_agent_greeting.py`). Operational step remains: restart/redeploy the backend so the route is served. Not run locally (no `node`): `npm run typecheck`/`lint` and the iOS checks.
+- follow_ups: Restart/redeploy the backend and confirm `POST /api/agent/greeting` returns 200; run typecheck/lint; optionally route the Inicio "Asistente de Préstamos" banner to the loans flow (`intent: 'prestamo-nuevo'`) if it should use `/api/loans/greeting` instead of the generic greeting.
+
+## [2026-09-13] change — assistant idle copy names the persona "Luna" (feminine)
+- agent: opencode / deepseek-flash
+- requirements: none (branding/persona)
+- invariants: none
+- files: `app/(tabs)/asistente.tsx`
+- decision: The hardcoded idle subtitle now reads "Hola Daniela, soy Luna, tu asesora de crédito…", matching the backend persona (feminine) that now introduces itself as Luna. No other frontend copy or app metadata changed.
+- rationale: Keep the on-screen assistant voice consistent with the backend's new persona without touching the app name or non-AI UI.
+- impact: Copy-only; `npm run typecheck`/`lint` still to be run by the user (no `node` here).
+- follow_ups: None.
+
+## [2026-09-13] fix — Asistente serializes turns (no overlapping message/voice/action requests)
+- agent: opencode / deepseek-flash
+- requirements: `openspec/changes/serialize-assistant-turns` (proposed)
+- invariants: INV-010 untouched (serializes existing HTTP calls; no transport change)
+- files: `src/state/ui.store.ts`, `app/(tabs)/asistente.tsx`, `src/a2ui/actionBus.ts`, `src/features/voice/useSpeechToText.ts`, `src/features/loans/useLoanConsult.ts`, `openspec/changes/serialize-assistant-turns/`
+- decision: The Soporte IA screen allowed the user to start a turn while a previous one was pending, so the backend got overlapping requests for one conversation and interleaved its replies. The guard was a React state boolean (`isSending`) read from a stale render closure, the mic was never disabled during a send, and the send button stayed enabled while the mic was recording (only the `TextInput` was non-editable); the A2UI `sendAction` path and the loan confirmation had no shared guard. Added a synchronous mutex to `useUiStore` (`turnInFlight`/`beginTurn`/`endTurn`; zustand `get`/`set` are synchronous, unlike state) and routed every server-bound turn through it: `/api/message`, `/api/loans/greeting`, `/api/loans/consult`, `/api/agent/greeting`, `/api/action`, and `POST /api/loans`, plus the initial-intent and focus-greeting effects. The mic is disabled while a turn is in flight; send/input are disabled for the full recording lifecycle. The lock releases as soon as the response arrives (not after TTS playback) and in every `finally`, so errors/timeouts never stick. Added defensive `start`/`stop` and `greet`/`send` re-entrancy refs in the leaf hooks. Client-routed `request_loan` stays lock-free (local modal). Per user decision: all turns share the lock; release on response.
+- rationale: A client coordination bug, not a backend one, and the only reliable guard is a synchronous lock shared across the screen and the action bus. Rejected alternatives: keeping `isSending` + a local ref (doesn't cover `actionBus`), `AbortController`-only (still sends the second request), backend dedup (out of scope). Trade-off: a surface action pressed while busy is ignored, not queued; the surface stays visible and can be pressed again after the response.
+- impact: New OpenSpec change `serialize-assistant-turns` (ADDED `mobile/assistant` turn-serialization requirements; MODIFIED `mobile/a2ui-engine` to gate actions). `mobile/assistant` is still pending from `add-assistant-orb-screen`/`add-assistant-initial-greeting`, so archive together. `npm run typecheck` clean. `npm run lint` could not run in this environment due to a pre-existing `unrs-resolver` native-binding failure (`Cannot find native binding`, npm optional-deps bug), not caused by this change.
+- follow_ups: Run `npm run lint` after repairing the eslint resolver; run `npx @fission-ai/openspec validate`; manual double-fire checks (double-tap send, mic-during-send, send-during-record, action-during-send) against the backend.
+
+## [2026-09-13] fix — loan comparison cards label and mark payment terms
+- agent: opencode / deepseek-flash
+- requirements: `openspec/changes/show-loan-term-cards` (proposed); backend `term_options`
+- invariants: none (same component/props; no transport change)
+- files: `src/catalog/standard/ScenarioComparison.tsx`, `openspec/changes/show-loan-term-cards/`
+- decision: After a loan offer the comparison cards rendered the backend's debt-payoff scenarios; for a debt-free user every card read "Plazo 1 meses / Interés total $0". The frontend was faithful (it reads `payoffMonths`/`totalInterest` and passes arrays through), so the fix is the backend serving engine-backed **plazo** options (see the backend CHANGELOG). On the client, `ScenarioComparison` now hides the generic "Plazo" row when a card's label is already a term (`/^\d+ meses$/i`) and adds a "Recomendado" tag on the highlighted term card; debt-scenario labels ("Pago mínimo", "Abono extra $X/mes") keep the "Plazo" row unchanged. No client-side recomputation.
+- rationale: The term is the card title for plazo cards, so repeating it in a "Plazo" row is noise; making the recommended term explicit turns the highlight into a clear choice. Keeping the same component and props avoids a catalog/wire change.
+- impact: New OpenSpec change `show-loan-term-cards` (ADDED `mobile/loans-assistant` "terminal offer compares loan payment terms"; ADDED `mobile/catalog-standard` term-card labeling). `npm run typecheck` clean; `npx @fission-ai/openspec validate --all` 19/19. `npm run lint` still blocked by the pre-existing `unrs-resolver` native-binding failure. Depends on the backend change (separate repo); renders the old cards until it lands.
+- follow_ups: Run `npm run lint` after repairing the eslint resolver; manual check with `u_don` (plazo cards with real values) and a debt persona (La Mesa debt scenarios unchanged).
+
+## [2026-09-13] fix — show the personalized recommended plazo and its reason
+- agent: opencode / deepseek-flash
+- requirements: `openspec/changes/show-loan-term-cards` (proposed); backend `recommend_term`
+- invariants: none (same component/props; no transport change)
+- files: `src/catalog/standard/ScenarioComparison.tsx`, `openspec/changes/show-loan-term-cards/`
+- decision: The highlighted card now reflects the backend's per-applicant recommendation (profile, payment likelihood/behavior, requested amount) instead of a fixed 24, and shows the recommended card's optional `note` (the reason). The offer's own term matches the recommendation on the backend. On the client, `ScenarioComparison` reads the optional `note` from a scenario and renders it as a small caption; the term-label/recommended-tag behavior from the earlier change is unchanged.
+- rationale: The user requires the recommended plazo to vary and to be explained; the note makes the choice legible. `scenarios` is an `any` prop, so no catalog/registry change was needed.
+- impact: `openspec/changes/show-loan-term-cards` updated (personalized recommendation + optional note). `npm run typecheck` clean; `npx @fission-ai/openspec validate --all` green (19/19). `npm run lint` still blocked by the pre-existing `unrs-resolver` native-binding failure. Depends on the backend change (separate repo).
+- follow_ups: Run `npm run lint` after repairing the eslint resolver; manual check that the reason caption renders on the recommended card.

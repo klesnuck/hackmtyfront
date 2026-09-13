@@ -25,6 +25,20 @@ async function getCachedAudioUri(assetId: string, baseUrl: string): Promise<stri
 }
 
 /**
+ * Restore a media playback session. Speech recognition can leave the audio
+ * session active in a recording category; on iOS the switch can transiently
+ * fail while recognition is tearing down, so retry once.
+ */
+async function ensurePlaybackMode(): Promise<void> {
+  try {
+    await setAudioModeAsync({ playsInSilentMode: true, allowsRecording: false });
+  } catch {
+    await new Promise((resolve) => setTimeout(resolve, 150));
+    await setAudioModeAsync({ playsInSilentMode: true, allowsRecording: false });
+  }
+}
+
+/**
  * Fire-and-forget playback — used for accessible-mode auto-play (REQ-ACC-03)
  * and the loans consult. Non-blocking, but a failed download/load/play is
  * surfaced in development instead of being silently discarded.
@@ -33,7 +47,7 @@ export async function playAudioAsset(assetId: string, baseUrl: string): Promise<
   try {
     // iOS mutes playback by default when the silent/ringer switch is off, and
     // speech recognition can leave the session in a recording category.
-    await setAudioModeAsync({ playsInSilentMode: true, allowsRecording: false });
+    await ensurePlaybackMode();
     const localUri = await getCachedAudioUri(assetId, baseUrl);
     const player = createAudioPlayer(localUri);
     player.play();
