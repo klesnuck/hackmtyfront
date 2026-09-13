@@ -1,4 +1,5 @@
 import * as SecureStore from 'expo-secure-store';
+import { Platform } from 'react-native';
 import { create } from 'zustand';
 import type { CatalogId } from '../a2ui/registry';
 import type { SessionResponse } from '../api/types';
@@ -6,6 +7,50 @@ import type { SessionResponse } from '../api/types';
 const SESSION_ID_KEY = 'la-mesa.session_id';
 const USER_ID_KEY = 'la-mesa.user_id';
 const ACCESSIBILITY_MODE_KEY = 'la-mesa.accessibility_mode';
+
+/**
+ * `expo-secure-store` has no web implementation (its `.web.ts` module is a
+ * stub `{}`, so every call throws on web — silently, since it's awaited
+ * inside a React Query mutation's `onSuccess`, which swallows the rejection
+ * instead of surfacing it). Web has no OS keychain to back a "secure" store
+ * anyway, so `localStorage` is the standard fallback there; this app has no
+ * real auth system to protect (SPECS.md §12 — session_id just identifies a
+ * mocked demo session), so the reduced security on web is an accepted trade.
+ */
+async function storageGet(key: string): Promise<string | null> {
+  if (Platform.OS === 'web') {
+    try {
+      return localStorage.getItem(key);
+    } catch {
+      return null;
+    }
+  }
+  return SecureStore.getItemAsync(key);
+}
+
+async function storageSet(key: string, value: string): Promise<void> {
+  if (Platform.OS === 'web') {
+    try {
+      localStorage.setItem(key, value);
+    } catch {
+      // Private browsing / storage disabled — session just won't persist across reloads.
+    }
+    return;
+  }
+  return SecureStore.setItemAsync(key, value);
+}
+
+async function storageDelete(key: string): Promise<void> {
+  if (Platform.OS === 'web') {
+    try {
+      localStorage.removeItem(key);
+    } catch {
+      // no-op
+    }
+    return;
+  }
+  return SecureStore.deleteItemAsync(key);
+}
 
 type SessionStore = {
   sessionId: string | null;
@@ -39,29 +84,29 @@ export const useSessionStore = create<SessionStore>((set) => ({
 
   hydrateFromStorage: async () => {
     const [sessionId, userId, accessibilityMode] = await Promise.all([
-      SecureStore.getItemAsync(SESSION_ID_KEY).catch(() => null),
-      SecureStore.getItemAsync(USER_ID_KEY).catch(() => null),
-      SecureStore.getItemAsync(ACCESSIBILITY_MODE_KEY).catch(() => null),
+      storageGet(SESSION_ID_KEY).catch(() => null),
+      storageGet(USER_ID_KEY).catch(() => null),
+      storageGet(ACCESSIBILITY_MODE_KEY).catch(() => null),
     ]);
     set({ sessionId, userId, accessibilityMode, hasHydrated: true });
   },
 
   setSession: async (session, accessibilityMode) => {
     await Promise.all([
-      SecureStore.setItemAsync(SESSION_ID_KEY, session.session_id),
-      SecureStore.setItemAsync(USER_ID_KEY, session.user_id),
+      storageSet(SESSION_ID_KEY, session.session_id),
+      storageSet(USER_ID_KEY, session.user_id),
       accessibilityMode
-        ? SecureStore.setItemAsync(ACCESSIBILITY_MODE_KEY, accessibilityMode)
-        : SecureStore.deleteItemAsync(ACCESSIBILITY_MODE_KEY).catch(() => undefined),
+        ? storageSet(ACCESSIBILITY_MODE_KEY, accessibilityMode)
+        : storageDelete(ACCESSIBILITY_MODE_KEY).catch(() => undefined),
     ]);
     set({ sessionId: session.session_id, userId: session.user_id, accessibilityMode });
   },
 
   clearSession: async () => {
     await Promise.all([
-      SecureStore.deleteItemAsync(SESSION_ID_KEY).catch(() => undefined),
-      SecureStore.deleteItemAsync(USER_ID_KEY).catch(() => undefined),
-      SecureStore.deleteItemAsync(ACCESSIBILITY_MODE_KEY).catch(() => undefined),
+      storageDelete(SESSION_ID_KEY).catch(() => undefined),
+      storageDelete(USER_ID_KEY).catch(() => undefined),
+      storageDelete(ACCESSIBILITY_MODE_KEY).catch(() => undefined),
     ]);
     set({ sessionId: null, userId: null, accessibilityMode: null });
   },

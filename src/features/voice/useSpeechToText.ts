@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { setAudioModeAsync } from 'expo-audio';
+import { withTiming } from 'react-native-reanimated';
 import { useUiStore } from '../../state/ui.store';
+import { micVolumeSignal } from '../assistant-orb/micVolumeSignal';
 
 export type SpeechToTextState = 'idle' | 'requesting-permission' | 'listening' | 'processing';
 
@@ -57,6 +59,17 @@ export function useSpeechToText() {
     }
   }, []);
 
+  // Feeds the assistant orb's particle reactivity (see `assistant-orb/`)
+  // from the mic session speech recognition already has open — value is a
+  // dB-ish float in roughly -2..10 (per expo-speech-recognition's types),
+  // normalized to 0..1 with fast attack / slow release.
+  const handleVolumeChange = useCallback((event: { value: number }) => {
+    const level = Math.min(1, Math.max(0, (event.value + 2) / 10));
+    const prev = micVolumeSignal.value;
+    const rising = level > prev;
+    micVolumeSignal.value = withTiming(level, { duration: rising ? 60 : 220 });
+  }, []);
+
   const handleError = useCallback(
     (event: any) => {
       if (startWaiterRef.current) {
@@ -64,6 +77,7 @@ export function useSpeechToText() {
         startWaiterRef.current = null;
         setState('idle');
         setRecordingFlag(false);
+        micVolumeSignal.value = withTiming(0, { duration: 200 });
       }
     },
     [setRecordingFlag],
@@ -73,6 +87,7 @@ export function useSpeechToText() {
     setState('idle');
     setPartialText('');
     setRecordingFlag(false);
+    micVolumeSignal.value = withTiming(0, { duration: 200 });
 
     // Speech recognition switches the audio session to a recording category;
     // restore media playback so the assistant's reply is audible on iOS.
@@ -95,6 +110,8 @@ export function useSpeechToText() {
     useSpeechRecognitionEventFn('error', handleError);
     // eslint-disable-next-line react-hooks/rules-of-hooks
     useSpeechRecognitionEventFn('end', handleEnd);
+    // eslint-disable-next-line react-hooks/rules-of-hooks
+    useSpeechRecognitionEventFn('volumechange', handleVolumeChange);
   }
 
   const start = useCallback(async () => {
@@ -132,6 +149,7 @@ export function useSpeechToText() {
         lang: RECOGNITION_LANGUAGE,
         interimResults: true,
         continuous: false,
+        volumeChangeEventOptions: { enabled: true, intervalMillis: 100 },
       });
     });
   }, [state, isNativeSupported, setRecordingFlag]);

@@ -1,7 +1,6 @@
-import { BlurView } from 'expo-blur';
-import { LinearGradient } from 'expo-linear-gradient';
-import { useEffect } from 'react';
-import { StyleSheet } from 'react-native';
+import { useEffect, useState } from 'react';
+import { Platform, StyleSheet, View } from 'react-native';
+import { LoadSkiaWeb } from '@shopify/react-native-skia/lib/module/web';
 import Animated, {
   Easing,
   cancelAnimation,
@@ -10,120 +9,105 @@ import Animated, {
   withRepeat,
   withTiming,
 } from 'react-native-reanimated';
+import Svg, { Circle, Defs, RadialGradient, Stop } from 'react-native-svg';
 
-const ORB_SIZE = 160;
+// Keep in sync with OrbCanvas.tsx's own ORB_SIZE — that file can't be
+// statically imported here (it imports `@shopify/react-native-skia`, which
+// must stay unevaluated until `LoadSkiaWeb()` resolves on web, see below),
+// so the value is duplicated rather than shared.
+const ORB_SIZE = 200;
+const HALO_SIZE = ORB_SIZE * 1.6;
+const GLOW_COLOR = '#AEB9D8';
+
+type OrbCanvasComponent = React.ComponentType<{ isListening?: boolean }>;
 
 /**
- * Clean, minimal fluid sphere with a subtle, gentle breathing animation.
- * Free of inner spots or hard overlapping circles.
+ * Platform entry point for the assistant orb. Delegates to `OrbCanvas`
+ * (the actual Skia particle renderer) but only ever `require()`s that
+ * module — which statically imports `@shopify/react-native-skia` — after
+ * `LoadSkiaWeb()` resolves on web. Importing `OrbCanvas` eagerly at this
+ * file's top level would evaluate Skia's web CanvasKit binding before the
+ * WASM binary is loaded ("CanvasKit is not defined"), since that binding is
+ * captured once, at require-time. Native has no such bootstrap step, so it
+ * loads `OrbCanvas` immediately.
+ *
+ * Also renders the soft ambient halo behind the particle sphere — a
+ * `react-native-svg` `RadialGradient` (a true radial falloff, unlike
+ * `LinearGradient`) breathing gently via Reanimated, brighter while
+ * listening. Kept outside `OrbCanvas`/Skia since it's simple, cheap, and
+ * shows immediately even while the Skia canvas is still loading on web.
  */
 export function AnimatedOrb({ isListening = false }: { isListening?: boolean }) {
+  const [OrbCanvas, setOrbCanvas] = useState<OrbCanvasComponent | null>(null);
   const breath = useSharedValue(0);
-  const slowRotate = useSharedValue(0);
 
   useEffect(() => {
-    // Gentle breathing cycle (3 seconds smooth sinusoid)
-    breath.value = withRepeat(
-      withTiming(1, { duration: 3000, easing: Easing.inOut(Easing.sin) }),
-      -1,
-      true,
-    );
+    breath.value = withRepeat(withTiming(1, { duration: 3400, easing: Easing.inOut(Easing.sin) }), -1, true);
+    return () => cancelAnimation(breath);
+  }, [breath]);
 
-    // Continuous slow background rotation for dynamic gradient movement
-    slowRotate.value = withRepeat(
-      withTiming(1, { duration: 24000, easing: Easing.linear }),
-      -1,
-      false,
-    );
+  useEffect(() => {
+    let mounted = true;
 
+    async function load() {
+      if (Platform.OS === 'web') {
+        await LoadSkiaWeb({ locateFile: (file: string) => '/' + file });
+      }
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { OrbCanvas: Component } = require('./OrbCanvas');
+      if (mounted) setOrbCanvas(() => Component);
+    }
+
+    load();
     return () => {
-      cancelAnimation(breath);
-      cancelAnimation(slowRotate);
+      mounted = false;
     };
-  }, [breath, slowRotate, isListening]);
+  }, []);
 
-  // Subtle, gentle scale breathing (0.98 to 1.02 when idle, up to 1.04 when speaking)
-  const containerAnimatedStyle = useAnimatedStyle(() => {
-    const maxScaleAdd = isListening ? 0.04 : 0.02;
-    const scale = 0.98 + breath.value * maxScaleAdd;
-
+  const haloStyle = useAnimatedStyle(() => {
+    const base = isListening ? 0.9 : 0.7;
+    const swing = isListening ? 0.25 : 0.2;
     return {
-      transform: [{ scale }],
-    };
-  });
-
-  // Soft rotation of the gradient
-  const orbGradientStyle = useAnimatedStyle(() => {
-    return {
-      transform: [{ rotate: `${slowRotate.value * 360}deg` }],
-    };
-  });
-
-  // Subtle outer aura glow opacity breathing
-  const auraGlowStyle = useAnimatedStyle(() => {
-    const opacity = isListening ? 0.65 + breath.value * 0.15 : 0.4 + breath.value * 0.1;
-    const scale = 1.06 + breath.value * 0.03;
-
-    return {
-      opacity,
-      transform: [{ scale }],
+      opacity: base + breath.value * swing,
+      transform: [{ scale: 1 + breath.value * 0.08 }],
     };
   });
 
   return (
-    <Animated.View style={[styles.container, containerAnimatedStyle]} pointerEvents="none">
-      {/* Soft outer glow aura layer (turquoise) */}
-      <Animated.View style={[styles.auraGlow, auraGlowStyle]}>
-        <LinearGradient
-          colors={['#00F2FE', '#00D2FF', '#00C6FF']}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={styles.fullGradient}
-        />
-        <BlurView intensity={35} tint="dark" style={StyleSheet.absoluteFill} />
+    <View style={styles.container} pointerEvents="none">
+      <Animated.View style={[styles.halo, haloStyle]}>
+        <Svg width={HALO_SIZE} height={HALO_SIZE}>
+          <Defs>
+            <RadialGradient id="orbHalo" cx="50%" cy="50%" r="50%">
+              <Stop offset="0%" stopColor="#F5F8FF" stopOpacity={0.95} />
+              <Stop offset="22%" stopColor={GLOW_COLOR} stopOpacity={0.75} />
+              <Stop offset="55%" stopColor={GLOW_COLOR} stopOpacity={0.32} />
+              <Stop offset="100%" stopColor={GLOW_COLOR} stopOpacity={0} />
+            </RadialGradient>
+          </Defs>
+          <Circle cx={HALO_SIZE / 2} cy={HALO_SIZE / 2} r={HALO_SIZE / 2} fill="url(#orbHalo)" />
+        </Svg>
       </Animated.View>
 
-      {/* Clean single fluid orb core (turquoise) */}
-      <Animated.View style={styles.orbCore}>
-        <Animated.View style={[styles.fullGradient, orbGradientStyle]}>
-          <LinearGradient
-            colors={['#E0FFFF', '#00F2FE', '#4FACFE', '#0B2545']}
-            start={{ x: 0.1, y: 0.1 }}
-            end={{ x: 0.9, y: 0.9 }}
-            style={styles.fullGradient}
-          />
-        </Animated.View>
-      </Animated.View>
-    </Animated.View>
+      {OrbCanvas ? <OrbCanvas isListening={isListening} /> : <View style={styles.placeholder} />}
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    width: ORB_SIZE,
-    height: ORB_SIZE,
+    width: HALO_SIZE,
+    height: HALO_SIZE,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  auraGlow: {
-    ...StyleSheet.absoluteFill,
-    borderRadius: ORB_SIZE / 2,
-    overflow: 'hidden',
+  halo: {
+    position: 'absolute',
+    width: HALO_SIZE,
+    height: HALO_SIZE,
   },
-  orbCore: {
-    width: ORB_SIZE * 0.88,
-    height: ORB_SIZE * 0.88,
-    borderRadius: (ORB_SIZE * 0.88) / 2,
-    overflow: 'hidden',
-    shadowColor: '#00F2FE',
-    shadowOpacity: 0.5,
-    shadowRadius: 20,
-    elevation: 8,
-  },
-  fullGradient: {
-    width: '100%',
-    height: '100%',
+  placeholder: {
+    width: ORB_SIZE,
+    height: ORB_SIZE,
   },
 });
-
-
