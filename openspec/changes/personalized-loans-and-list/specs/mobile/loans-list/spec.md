@@ -29,12 +29,17 @@ taps a row whose source is a created loan; liability rows keep their "Abonar" fl
 - **WHEN** the user taps a row with source `loan`
 - **THEN** the loan detail screen opens for that loan id
 
-### Requirement: Confirming an application opens the new loan's page
+### Requirement: Confirming an application opens the loans list and resets the chat
 When the user confirms an in-assistant loan and it is created, the system SHALL
-navigate to that loan's personalized detail page and SHALL reset the assistant's
-consult/panel state so returning to the assistant shows the idle greeting rather
-than the stale terminal surface.
+navigate to the Préstamos list (all loans) and SHALL fully reset the assistant
+conversation — clearing the consult/panel state and cached surfaces and minting a
+fresh backend session — so returning to the assistant starts a new interaction
+(the greeting replays) instead of showing the stale terminal surface.
 
 #### Scenario: Loan created from the assistant
 - **WHEN** the user confirms the loan and the backend returns the created loan
-- **THEN** the app navigates to the loan's detail page and clears the consult state
+- **THEN** the app navigates to the Préstamos list and resets the assistant conversation
+
+#### Scenario: Returning to the assistant
+- **WHEN** the user returns to the Asistente tab after the reset
+- **THEN** the assistant is idle, greets again, and has no prior conversation context
