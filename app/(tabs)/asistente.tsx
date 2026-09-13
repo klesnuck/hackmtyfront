@@ -19,7 +19,8 @@ import Animated, { SlideInDown } from 'react-native-reanimated';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { A2UISurface, useA2UIStore } from '../../src/a2ui';
 import { ApiError } from '../../src/api/client';
-import { agentGreeting, createLoan, sendMessage } from '../../src/api/endpoints';
+import { agentGreeting, createLoan, createSession, sendMessage } from '../../src/api/endpoints';
+import type { MessageRequest, SurfaceResponse } from '../../src/api/types';
 import { AnimatedPressable } from '../../src/catalog/shared/AnimatedPressable';
 import { AnimatedOrb } from '../../src/features/assistant-orb/AnimatedOrb';
 import { SuggestedPrompts } from '../../src/features/assistant-orb/SuggestedPrompts';
@@ -51,6 +52,8 @@ export default function AsistenteScreen() {
   const { intent } = useLocalSearchParams<{ intent?: string }>();
   const sessionId = useSessionStore((s) => s.sessionId);
   const userId = useSessionStore((s) => s.userId);
+  const accessibilityMode = useSessionStore((s) => s.accessibilityMode);
+  const setSession = useSessionStore((s) => s.setSession);
   const catalogId = useActiveCatalogId();
   const applyMessages = useA2UIStore((s) => s.applyMessages);
   const isSending = useUiStore((s) => s.turnInFlight);
@@ -85,6 +88,32 @@ export default function AsistenteScreen() {
     const months = ctx.months ? Number(ctx.months) : undefined;
     setPendingLoanRequest({ amount, months });
   }, []);
+
+  const isUnknownSessionError = (error: unknown): boolean =>
+    error instanceof ApiError &&
+    error.status === 404 &&
+    (error.body as { detail?: string } | undefined)?.detail === 'unknown session';
+
+  /**
+   * The persisted session_id can outlive the backend's record of it (e.g. a
+   * dev backend restarted with a fresh DB while the device kept the old id
+   * in SecureStore) — /api/message then 404s with "unknown session" forever,
+   * since nothing else re-mints it. Mint a replacement via the same
+   * POST /api/session the app uses at login and retry once.
+   */
+  const sendMessageResilient = useCallback(
+    async (request: MessageRequest): Promise<SurfaceResponse> => {
+      try {
+        return await sendMessage(request);
+      } catch (error) {
+        if (!isUnknownSessionError(error) || !userId) throw error;
+        const fresh = await createSession(userId);
+        await setSession(fresh, accessibilityMode);
+        return sendMessage({ ...request, session_id: fresh.session_id });
+      }
+    },
+    [userId, accessibilityMode, setSession],
+  );
 
   const handleConfirmLoan = async () => {
     if (!pendingLoanRequest || !userId || !beginTurn()) return;
@@ -143,7 +172,7 @@ export default function AsistenteScreen() {
         }
       } else {
         if (!sessionId) return;
-        const response = await sendMessage({ session_id: sessionId, text });
+        const response = await sendMessageResilient({ session_id: sessionId, text });
         applyMessages(response.a2ui);
         if (response.surface_id) {
           setPanelState({ kind: 'surface', surfaceId: response.surface_id });
@@ -225,7 +254,7 @@ export default function AsistenteScreen() {
       // Fallback for a backend that predates POST /api/agent/greeting: start the
       // conversation with the existing /api/message turn instead of dead-ending.
       const fallbackToMessage = async () => {
-        const response = await sendMessage({ session_id: sessionId, text: 'Hola' });
+        const response = await sendMessageResilient({ session_id: sessionId, text: 'Hola' });
         if (cancelled) return;
         if (Array.isArray(response.a2ui) && response.a2ui.length > 0) {
           applyMessages(response.a2ui);
@@ -275,7 +304,17 @@ export default function AsistenteScreen() {
       return () => {
         cancelled = true;
       };
-    }, [intent, sessionId, panelState.kind, catalogId, baseUrl, applyMessages, beginTurn, endTurn]),
+    }, [
+      intent,
+      sessionId,
+      panelState.kind,
+      catalogId,
+      baseUrl,
+      applyMessages,
+      beginTurn,
+      endTurn,
+      sendMessageResilient,
+    ]),
   );
 
   const handleIdleSendText = () => {

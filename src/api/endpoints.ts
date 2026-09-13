@@ -34,22 +34,22 @@ import type {
 
 // REQ-API-01
 export function createSession(userId: string): Promise<SessionResponse> {
-  return apiRequest<SessionResponse>('/api/session', { method: 'POST', body: { user_id: userId } });
+  return apiRequest<SessionResponse>('api/session', { method: 'POST', body: { user_id: userId } });
 }
 
 /** Real credential check — POST /api/login (amitie/backend/api/routers/auth.py, SPECS.md §12). */
 export function login(request: LoginRequest): Promise<LoginResponse> {
-  return apiRequest<LoginResponse>('/api/login', { method: 'POST', body: request });
+  return apiRequest<LoginResponse>('api/login', { method: 'POST', body: request });
 }
 
 // REQ-API-02
 export function sendMessage(request: MessageRequest): Promise<SurfaceResponse> {
-  return apiRequest<SurfaceResponse>('/api/message', { method: 'POST', body: request });
+  return apiRequest<SurfaceResponse>('api/message', { method: 'POST', body: request });
 }
 
 // REQ-API-12 — deterministic spoken greeting for the Asistente tab (no LLM).
 export function agentGreeting(sessionId: string): Promise<AgentGreetingResponse> {
-  return apiRequest<AgentGreetingResponse>('/api/agent/greeting', {
+  return apiRequest<AgentGreetingResponse>('api/agent/greeting', {
     method: 'POST',
     body: { session_id: sessionId },
   });
@@ -57,12 +57,12 @@ export function agentGreeting(sessionId: string): Promise<AgentGreetingResponse>
 
 // REQ-API-03
 export function sendAction(request: ActionRequest): Promise<ActionResponse> {
-  return apiRequest<ActionResponse>('/api/action', { method: 'POST', body: request });
+  return apiRequest<ActionResponse>('api/action', { method: 'POST', body: request });
 }
 
 // REQ-API-04
 export function getSurface(surfaceId: string): Promise<UiResponse> {
-  return apiRequest<UiResponse>(`/api/ui/${encodeURIComponent(surfaceId)}`);
+  return apiRequest<UiResponse>(`api/ui/${encodeURIComponent(surfaceId)}`);
 }
 
 // REQ-API-07 — returns a playable URL, not JSON; see features/voice.
@@ -85,25 +85,25 @@ export function getKillTest(surfaceId: string): Promise<KillTestResponse> {
 
 // REQ-API-05
 export function createSavingBag(request: CreateSavingBagRequest): Promise<SavingBagResponse> {
-  return apiRequest<SavingBagResponse>('/api/saving-bags', { method: 'POST', body: request });
+  return apiRequest<SavingBagResponse>('api/saving-bags', { method: 'POST', body: request });
 }
 export function listSavingBags(): Promise<SavingBagResponse[]> {
-  return apiRequest<SavingBagResponse[]>('/api/saving-bags');
+  return apiRequest<SavingBagResponse[]>('api/saving-bags');
 }
 export function getSavingBag(bagId: string): Promise<SavingBagResponse> {
-  return apiRequest<SavingBagResponse>(`/api/saving-bags/${encodeURIComponent(bagId)}`);
+  return apiRequest<SavingBagResponse>(`api/saving-bags/${encodeURIComponent(bagId)}`);
 }
 export function answerSavingBagQuestion(
   bagId: string,
   request: Record<string, unknown>,
 ): Promise<SavingBagResponse> {
-  return apiRequest<SavingBagResponse>(`/api/saving-bags/${encodeURIComponent(bagId)}/answer`, {
+  return apiRequest<SavingBagResponse>(`api/saving-bags/${encodeURIComponent(bagId)}/answer`, {
     method: 'POST',
     body: request,
   });
 }
 export function refreshSavingBag(bagId: string): Promise<SavingBagResponse> {
-  return apiRequest<SavingBagResponse>(`/api/saving-bags/${encodeURIComponent(bagId)}/refresh`, {
+  return apiRequest<SavingBagResponse>(`api/saving-bags/${encodeURIComponent(bagId)}/refresh`, {
     method: 'POST',
     body: {},
   });
@@ -111,13 +111,13 @@ export function refreshSavingBag(bagId: string): Promise<SavingBagResponse> {
 
 // REQ-API-06
 export function negotiationTurn(session: string, request: NegotiationTurnRequest): Promise<NegotiationTurnResponse> {
-  return apiRequest<NegotiationTurnResponse>(`/api/negotiation/${encodeURIComponent(session)}/turn`, {
+  return apiRequest<NegotiationTurnResponse>(`api/negotiation/${encodeURIComponent(session)}/turn`, {
     method: 'POST',
     body: request,
   });
 }
 export function negotiationTakeControl(session: string): Promise<NegotiationTurnResponse> {
-  return apiRequest<NegotiationTurnResponse>(`/api/negotiation/${encodeURIComponent(session)}/take-control`, {
+  return apiRequest<NegotiationTurnResponse>(`api/negotiation/${encodeURIComponent(session)}/take-control`, {
     method: 'POST',
     body: {},
   });
@@ -126,36 +126,36 @@ export function negotiationTakeControl(session: string): Promise<NegotiationTurn
 // --- Plain-REST finance endpoints (amitie/backend/api/routers/finance.py) ---
 
 export function getProfile(userId: string): Promise<ProfileResponse> {
-  return apiRequest<ProfileResponse>(`/api/profile?user_id=${encodeURIComponent(userId)}`);
+  return apiRequest<ProfileResponse>(`api/profile?user_id=${encodeURIComponent(userId)}`);
 }
 
 export function getAccounts(userId: string): Promise<AccountsResponse> {
-  return apiRequest<AccountsResponse>(`/api/accounts?user_id=${encodeURIComponent(userId)}`);
+  return apiRequest<AccountsResponse>(`api/accounts?user_id=${encodeURIComponent(userId)}`);
 }
 
 export function getLiabilities(userId: string): Promise<LiabilitiesResponse> {
-  return apiRequest<LiabilitiesResponse>(`/api/liabilities?user_id=${encodeURIComponent(userId)}`);
+  return apiRequest<LiabilitiesResponse>(`api/liabilities?user_id=${encodeURIComponent(userId)}`);
 }
 
 /** "Abonar" — applies a real payment against a liability (moves account balance, records a transaction). */
 export function payLiability(liabilityId: string, request: PaymentRequest): Promise<PaymentResponse> {
-  return apiRequest<PaymentResponse>(`/api/liabilities/${encodeURIComponent(liabilityId)}/payment`, {
+  return apiRequest<PaymentResponse>(`api/liabilities/${encodeURIComponent(liabilityId)}/payment`, {
     method: 'POST',
     body: request,
   });
 }
 
 export function getRecipients(userId: string): Promise<RecipientsResponse> {
-  return apiRequest<RecipientsResponse>(`/api/recipients?user_id=${encodeURIComponent(userId)}`);
+  return apiRequest<RecipientsResponse>(`api/recipients?user_id=${encodeURIComponent(userId)}`);
 }
 
 export function createRecipient(request: RecipientCreateRequest): Promise<RecipientResponse> {
-  return apiRequest<RecipientResponse>('/api/recipients', { method: 'POST', body: request });
+  return apiRequest<RecipientResponse>('api/recipients', { method: 'POST', body: request });
 }
 
 /** Real transfer submission — moves persisted money out of the source account (`POST /api/transfers`). */
 export function submitTransfer(request: TransferRequest): Promise<TransferResponse> {
-  return apiRequest<TransferResponse>('/api/transfers', { method: 'POST', body: request });
+  return apiRequest<TransferResponse>('api/transfers', { method: 'POST', body: request });
 }
 
 // --- Loans & Credits consult (API_KNOWLEDGE.md §6) ---
@@ -163,11 +163,13 @@ export function submitTransfer(request: TransferRequest): Promise<TransferRespon
 import Constants from 'expo-constants';
 import { parseMultipartJsonPart } from './multipart';
 import type {
+  LoanDetailResponse,
   LoanResponse,
   LoansConsultPayload,
   LoansConsultRequest,
   LoansCreateRequest,
   LoansGreetingPayload,
+  LoansListResponse,
 } from './types';
 
 /** The configured backend origin (no trailing slash). */
@@ -233,11 +235,23 @@ export async function loansConsult(request: LoansConsultRequest): Promise<LoansC
 
 /** POST /api/loans — create + disburse a loan (manual, irreversible). */
 export function createLoan(request: LoansCreateRequest): Promise<LoanResponse> {
-  return apiRequest<LoanResponse>('/api/loans', { method: 'POST', body: request });
+  return apiRequest<LoanResponse>('api/loans', { method: 'POST', body: request });
 }
 
 /** GET /api/loans/{loan_request_id} — hydrated terminal consult (JSON). */
 export function getLoanRequest(loanRequestId: string): Promise<LoansConsultPayload> {
-  return apiRequest<LoansConsultPayload>(`/api/loans/${encodeURIComponent(loanRequestId)}`);
+  return apiRequest<LoansConsultPayload>(`api/loans/${encodeURIComponent(loanRequestId)}`);
+}
+
+/** GET /api/loans?user_id= — one list of created loans + active liabilities. */
+export function listLoans(userId: string): Promise<LoansListResponse> {
+  return apiRequest<LoansListResponse>(`api/loans?user_id=${encodeURIComponent(userId)}`);
+}
+
+/** GET /api/loans/{loan_id}/ui — personalized per-loan A2UI page (create-or-hydrate). */
+export function getLoanDetail(loanId: string, userId: string): Promise<LoanDetailResponse> {
+  return apiRequest<LoanDetailResponse>(
+    `/api/loans/${encodeURIComponent(loanId)}/ui?user_id=${encodeURIComponent(userId)}`,
+  );
 }
 

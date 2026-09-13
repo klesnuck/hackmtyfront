@@ -318,6 +318,7 @@
 - impact: New OpenSpec change `fix-orb-native-canvaskit-bundle` (ADDED `mobile/assistant-orb` "Orb boots on native without the web CanvasKit bundle"). Web is unchanged (`public/canvaskit.wasm` still loaded before `OrbCanvas`). `npm run lint` still blocked by the pre-existing `unrs-resolver` native-binding failure.
 - follow_ups: Render on device needs a dev-client rebuild (Skia is a native dep; not Expo Go). Verify `npx expo export --platform ios|android` no longer resolves `fs`, and `--platform web` still loads CanvasKit.
 
+<<<<<<< HEAD
 ## [2026-09-13] change — full-panel generative assistant; voice STT reconciled; turn lock archived
 - agent: opencode / deepseek-flash (implementation delegated to a general sub-agent in parallel; spec reconciliation and archive performed in the main session)
 - requirements: `openspec/changes/archive/2026-09-13-replace-assistant-chat-with-fullscreen-generative-ui`, `.../2026-09-13-add-assistant-voice-transcription`, `.../2026-09-13-serialize-assistant-turns`; capabilities `mobile/assistant`, `mobile/a2ui-engine`, `mobile/voice`
@@ -327,3 +328,14 @@
 - rationale: The agent's generated UI must be the experience, not a chat thread, and old surfaces bound to stale data models must not linger. Reconciling voice-transcription prevents re-introducing the chat layout. The turn lock prevents overlapping requests per conversation.
 - impact: `tsc --noEmit` clean; `eslint` clean on touched files; `openspec validate --specs --strict` 6/6 green. The OpenSpec CLI could not move change directories into `openspec/changes/archive/` because the running Expo/Metro watcher holds the `openspec/changes` tree (Windows `EPERM` on directory rename); archives were done via copy+delete and the delta specs merged by hand (the archive workflow's agent-driven sync). Loan intake questions and the greeting text are now invisible by design (strict no-text).
 - follow_ups: Manual on-device checks remain unchecked (replace `5.2`; serialize `5.3`–`5.6`; voice `1.3`/`5.x`). `add-assistant-orb-screen` and `add-assistant-initial-greeting` still carry ADDED `mobile/assistant` requirements that assume inline chat / greeting text and must be reconciled before archiving. Floating orb + text pill + suggested prompts need a visual pass on device.
+=======
+## [2026-09-13] change — one Préstamos list + personalized per-loan pages
+- agent: opencode / deepseek-flash
+- requirements: `openspec/changes/personalized-loans-and-list` (proposed); backend loan-detail/list endpoints
+- invariants: INV-023 untouched (additive REST); no A2UI wire change
+- files: `src/api/{endpoints,types}.ts`, `src/features/loans/{loans,LoanCard,useLoanConsult}.ts(x)`, `app/(tabs)/prestamos.tsx`, `app/loan/[id].tsx`, `src/catalog/voz-color/{Text,Card,Badge,index}.ts(x)`, `openspec/changes/personalized-loans-and-list/`
+- decision: The Préstamos tab now calls `GET /api/loans?user_id=` and renders created loans + active liabilities in one list; loan rows (source `loan`) navigate to a new `app/loan/[id].tsx` that renders the backend's personalized A2UI page with the catalog the backend chose (`amitie.voz-color.v1` → voz-color, else standard). The "Solicitar préstamo" modal now calls `POST /api/loans` and invalidates the list query instead of simulating an outcome. The accessible catalog's Text/Card/Badge honor `tone` (strong colors, larger type/targets) for the emoji/color audience. Also fixed the documented `useLoanConsult.send` `sessionIdOverride` parameter so the last pre-existing type error is gone.
+- rationale: The list was reading liabilities, not loans, so it was empty. The detail page is lazy (backend creates once, hydrates with fresh data), so per-loan independent personalization costs one generation. Rendering with the backend-declared catalog lets a `simple` audience get voz-color even without an accessibility profile.
+- impact: New OpenSpec change `personalized-loans-and-list` (`mobile/loans-list`, `mobile/loan-detail` ADDED; `mobile/catalog-accessible` updated). `npm run typecheck` clean (no remaining errors). `npx @fission-ai/openspec validate --all` 23/23. `npm run lint` still blocked by the pre-existing `unrs-resolver` native-binding failure. Depends on the backend change.
+- follow_ups: Manual check: modal create → row appears → tap → personalized page; reopen re-hydrates; `u_don` gets the emoji/color page; private reason performs no research.
+>>>>>>> c7392aa9b3fad9e4ea13a91038200e4db57c899e

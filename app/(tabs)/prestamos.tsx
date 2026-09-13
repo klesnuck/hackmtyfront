@@ -1,5 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { router } from 'expo-router';
 import { useState } from 'react';
 import {
   FlatList,
@@ -13,6 +14,7 @@ import {
 import Animated, { FadeInUp } from 'react-native-reanimated';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AnimatedPressable } from '../../src/catalog/shared/AnimatedPressable';
+import { createLoan } from '../../src/api/endpoints';
 import { AbonoModal } from '../../src/features/loans/AbonoModal';
 import { LoanCard } from '../../src/features/loans/LoanCard';
 import { fetchLoans, type Loan } from '../../src/features/loans/loans';
@@ -66,6 +68,7 @@ const RESULT_COPY: Record<
 export default function PrestamosScreen() {
   const insets = useSafeAreaInsets();
   const userId = useSessionStore((s) => s.userId);
+  const queryClient = useQueryClient();
   const { data: loans, isLoading } = useQuery({
     queryKey: ['loans', userId],
     queryFn: () => fetchLoans(userId as string),
@@ -76,6 +79,9 @@ export default function PrestamosScreen() {
 
   const openForm = () => setFormVisible(true);
   const closeForm = () => setFormVisible(false);
+  const handleLoanPress = (loan: Loan) => {
+    if (loan.source === 'loan') router.push({ pathname: '/loan/[id]', params: { id: loan.id } });
+  };
 
   return (
     <SafeAreaView style={styles.screen} edges={['bottom']}>
@@ -97,7 +103,7 @@ export default function PrestamosScreen() {
           showsVerticalScrollIndicator={false}
           renderItem={({ item, index }) => (
             <Animated.View entering={FadeInUp.duration(260).delay(60 * index)}>
-              <LoanCard loan={item} onAbonar={setAbonoLoan} />
+              <LoanCard loan={item} onAbonar={setAbonoLoan} onPress={handleLoanPress} />
             </Animated.View>
           )}
           ListHeaderComponent={
@@ -109,7 +115,12 @@ export default function PrestamosScreen() {
         />
       )}
 
-      <ApplicationModal visible={isFormVisible} onClose={closeForm} />
+      <ApplicationModal
+        visible={isFormVisible}
+        onClose={closeForm}
+        userId={userId}
+        onSubmitted={() => queryClient.invalidateQueries({ queryKey: ['loans', userId] })}
+      />
       <AbonoModal loan={abonoLoan} userId={userId} onClose={() => setAbonoLoan(null)} />
     </SafeAreaView>
   );
@@ -131,7 +142,17 @@ function EmptyState({ onApply }: { onApply: () => void }) {
   );
 }
 
-function ApplicationModal({ visible, onClose }: { visible: boolean; onClose: () => void }) {
+function ApplicationModal({
+  visible,
+  onClose,
+  userId,
+  onSubmitted,
+}: {
+  visible: boolean;
+  onClose: () => void;
+  userId: string | null;
+  onSubmitted: () => void;
+}) {
   const [stage, setStage] = useState<FormStage>('form');
   const [amount, setAmount] = useState('');
   const [term, setTerm] = useState<number | null>(null);
@@ -152,18 +173,23 @@ function ApplicationModal({ visible, onClose }: { visible: boolean; onClose: () 
 
   const isValid = Number(amount) > 0 && term !== null && purpose !== null;
 
-  const handleSubmit = () => {
-    if (!isValid) return;
+  const handleSubmit = async () => {
+    if (!isValid || !userId) return;
     setStage('submitting');
-    // UI-only simulated result — no backend call. tasks.md §1 blocks a real
-    // submission on the backend team confirming the application response
-    // shape; this picks a random outcome purely so the result UI (all four
-    // states the spec calls for) can be seen and demoed today.
-    const outcomes: ApplicationResult[] = ['approved', 'pending', 'rejected', 'needs_more_info'];
-    setTimeout(() => {
-      setResult(outcomes[Math.floor(Math.random() * outcomes.length)]);
+    try {
+      await createLoan({
+        user_id: userId,
+        amount: Number(amount),
+        months: term ?? undefined,
+        purpose: purpose ?? undefined,
+      });
+      setResult('approved');
+      onSubmitted();
+    } catch {
+      setResult('rejected');
+    } finally {
       setStage('result');
-    }, 700);
+    }
   };
 
   return (
