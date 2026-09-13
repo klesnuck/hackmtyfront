@@ -59,7 +59,7 @@ acceptable per the validator brief since no 14/16/20px bold token exists in
 `theme/tokens.ts` today.
 
 One copy deviation worth flagging explicitly: Figma's own node text reads
-"Asistente de Préstamos **AI**" (English acronym), but `proposal.md`,
+"Asistente de Préstamos" (English acronym), but `proposal.md`,
 `design.md`, and `tasks.md` (§3.1) all quote the banner title as "Asistente
 de Préstamos **IA**" (Spanish). The built code follows the written spec
 ("IA"), not the literal Figma string. Treating this as intentional — the

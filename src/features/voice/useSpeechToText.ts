@@ -37,6 +37,10 @@ export function useSpeechToText() {
   const finalTranscriptRef = useRef<string | null>(null);
   const startWaiterRef = useRef<{ resolve: () => void; reject: (error: Error) => void } | null>(null);
   const stopWaiterRef = useRef<((transcript: string | null) => void) | null>(null);
+  // Synchronous re-entrancy guards: `state` is React state, so two presses in
+  // the same tick can both read `idle`/`listening` before a re-render.
+  const startingRef = useRef(false);
+  const stoppingRef = useRef(false);
 
   const isNativeSupported = Boolean(NativeSpeechModule);
 
@@ -98,56 +102,66 @@ export function useSpeechToText() {
   }
 
   const start = useCallback(async () => {
-    if (state !== 'idle') return;
+    if (state !== 'idle' || startingRef.current) return;
+    startingRef.current = true;
 
-    if (!isNativeSupported) {
-      // In standard Expo Go where custom native module is unavailable, simulated voice active mode
-      setState('listening');
-      setRecordingFlag(true);
-      return;
-    }
-
-    setState('requesting-permission');
-
-    if (!permissionRequested.current) {
-      const permission = await NativeSpeechModule.requestPermissionsAsync();
-      permissionRequested.current = true;
-      if (!permission?.granted) {
-        setState('idle');
-        throw new Error('Microphone/speech recognition permission denied');
+    try {
+      if (!isNativeSupported) {
+        // In standard Expo Go where custom native module is unavailable, simulated voice active mode
+        setState('listening');
+        setRecordingFlag(true);
+        return;
       }
-    }
 
-    if (!NativeSpeechModule.isRecognitionAvailable()) {
-      setState('idle');
-      throw new Error('Speech recognition unavailable on this device');
-    }
+      setState('requesting-permission');
 
-    finalTranscriptRef.current = null;
-    setPartialText('');
+      if (!permissionRequested.current) {
+        const permission = await NativeSpeechModule.requestPermissionsAsync();
+        permissionRequested.current = true;
+        if (!permission?.granted) {
+          setState('idle');
+          throw new Error('Microphone/speech recognition permission denied');
+        }
+      }
 
-    await new Promise<void>((resolve, reject) => {
-      startWaiterRef.current = { resolve, reject };
-      NativeSpeechModule.start({
-        lang: RECOGNITION_LANGUAGE,
-        interimResults: true,
-        continuous: false,
+      if (!NativeSpeechModule.isRecognitionAvailable()) {
+        setState('idle');
+        throw new Error('Speech recognition unavailable on this device');
+      }
+
+      finalTranscriptRef.current = null;
+      setPartialText('');
+
+      await new Promise<void>((resolve, reject) => {
+        startWaiterRef.current = { resolve, reject };
+        NativeSpeechModule.start({
+          lang: RECOGNITION_LANGUAGE,
+          interimResults: true,
+          continuous: false,
+        });
       });
-    });
+    } finally {
+      startingRef.current = false;
+    }
   }, [state, isNativeSupported, setRecordingFlag]);
 
   const stop = useCallback((): Promise<string | null> => {
-    if (state !== 'listening') return Promise.resolve(null);
+    if (state !== 'listening' || stoppingRef.current) return Promise.resolve(null);
+    stoppingRef.current = true;
     setState('processing');
 
     if (!isNativeSupported) {
+      stoppingRef.current = false;
       setState('idle');
       setRecordingFlag(false);
       return Promise.resolve(null);
     }
 
     return new Promise<string | null>((resolve) => {
-      stopWaiterRef.current = resolve;
+      stopWaiterRef.current = (transcript) => {
+        stoppingRef.current = false;
+        resolve(transcript);
+      };
       NativeSpeechModule.stop();
     });
   }, [state, isNativeSupported, setRecordingFlag]);

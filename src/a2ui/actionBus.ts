@@ -1,4 +1,5 @@
 import { sendAction } from '../api/endpoints';
+import { useUiStore } from '../state/ui.store';
 import { resolveDynamic } from './resolve';
 import { useA2UIStore } from './store';
 import type { A2UIComponent, ComponentId } from './types';
@@ -37,13 +38,19 @@ export async function dispatchA2UIAction(
     return;
   }
 
-  const response = await sendAction({
-    surface_id: surfaceId,
-    name: eventDef.name,
-    source_component_id: sourceComponentId,
-    context: { ...resolvedContext, ...extraContext },
-  });
+  const { beginTurn, endTurn } = useUiStore.getState();
+  if (!beginTurn()) return; // a turn is already in flight — never overlap requests
+  try {
+    const response = await sendAction({
+      surface_id: surfaceId,
+      name: eventDef.name,
+      source_component_id: sourceComponentId,
+      context: { ...resolvedContext, ...extraContext },
+    });
 
-  useA2UIStore.getState().applyMessages(response.a2ui);
+    useA2UIStore.getState().applyMessages(response.a2ui);
+  } finally {
+    endTurn();
+  }
 }
 

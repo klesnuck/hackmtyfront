@@ -54,7 +54,7 @@ export default function AsistentePrestamosScreen() {
         <Pressable onPress={() => router.back()} hitSlop={8}>
           <Ionicons name="chevron-back" size={24} color={colors.text.primary} />
         </Pressable>
-        <Text style={styles.topBarTitle}>Asistente de Préstamos IA</Text>
+        <Text style={styles.topBarTitle}>Asistente de Préstamos</Text>
         <View style={{ width: 24 }} />
       </View>
 

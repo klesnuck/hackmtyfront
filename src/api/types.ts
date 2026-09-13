@@ -38,6 +38,15 @@ export type SurfaceResponse = {
   audio_ref?: string | null;
 };
 
+/** `POST /api/agent/greeting` — deterministic spoken greeting (API_KNOWLEDGE.md §5). */
+export type AgentGreetingResponse = {
+  status: 'ok' | 'error';
+  assistant_text: string;
+  audio_ref?: string | null;
+  a2ui: A2UIMessage[];
+  surface_id: string | null;
+};
+
 export type ActionRequest = {
   surface_id: string;
   name: string;

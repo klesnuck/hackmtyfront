@@ -59,6 +59,9 @@ export function useLoanConsult() {
   const baseUrlRef = useRef('');
   const sessionIdRef = useRef<string | null>(null);
   const loanRequestIdRef = useRef<string | null>(null);
+  // Synchronous re-entrancy guard — the screen already serializes turns, but
+  // greet/send must also never overlap if called from elsewhere.
+  const inFlightRef = useRef(false);
 
   /** Set the base URL for audio playback. */
   const setBaseUrl = useCallback((url: string) => {
@@ -68,6 +71,8 @@ export function useLoanConsult() {
   /** Start a new loan conversation — calls POST /api/loans/greeting. */
   const greet = useCallback(
     async (userId: string): Promise<LoansGreetingPayload> => {
+      if (inFlightRef.current) throw new Error('useLoanConsult.greet: a loan turn is already in flight');
+      inFlightRef.current = true;
       setState((prev) => ({ ...prev, status: 'greeting', errorMessage: null }));
 
       try {
@@ -91,6 +96,8 @@ export function useLoanConsult() {
         const msg = (err as Error).message || 'Error al iniciar la conversación de préstamo.';
         setState((prev) => ({ ...prev, status: 'error', errorMessage: msg }));
         throw err;
+      } finally {
+        inFlightRef.current = false;
       }
     },
     [],
@@ -99,9 +106,11 @@ export function useLoanConsult() {
   /** Send a user turn — calls POST /api/loans/consult. */
   const send = useCallback(
     async (text: string): Promise<LoansConsultPayload> => {
+      if (inFlightRef.current) throw new Error('useLoanConsult.send: a loan turn is already in flight');
       if (!sessionIdRef.current) {
         throw new Error('useLoanConsult.send: no session — call greet() first');
       }
+      inFlightRef.current = true;
 
       setState((prev) => ({ ...prev, errorMessage: null }));
 
@@ -162,6 +171,8 @@ export function useLoanConsult() {
         const msg = (err as Error).message || 'Error al consultar sobre el préstamo.';
         setState((prev) => ({ ...prev, status: 'error', errorMessage: msg }));
         throw err;
+      } finally {
+        inFlightRef.current = false;
       }
     },
     [],

@@ -14,7 +14,7 @@
 
 ## 3. AI banner
 
-- [x] 3.1 Build the dark promotional banner card matching Figma copy/colors ("Asistente de Préstamos IA")
+- [x] 3.1 Build the dark promotional banner card matching Figma copy/colors ("Asistente de Préstamos")
 - [x] 3.2 Wire its tap target to `router.push('/asistente-prestamos')` — **not** the Soporte IA tab (superseded 2026-09-12, see `design.md` "Repurposing decision"); that screen is the intermediate picker that hands the user off to the assistant with a specific intent already attached
 
 ## 4. Balance card

@@ -3,6 +3,7 @@ import type {
   AccountsResponse,
   ActionRequest,
   ActionResponse,
+  AgentGreetingResponse,
   CreateSavingBagRequest,
   KillTestResponse,
   LiabilitiesResponse,
@@ -44,6 +45,14 @@ export function login(request: LoginRequest): Promise<LoginResponse> {
 // REQ-API-02
 export function sendMessage(request: MessageRequest): Promise<SurfaceResponse> {
   return apiRequest<SurfaceResponse>('/api/message', { method: 'POST', body: request });
+}
+
+// REQ-API-12 — deterministic spoken greeting for the Asistente tab (no LLM).
+export function agentGreeting(sessionId: string): Promise<AgentGreetingResponse> {
+  return apiRequest<AgentGreetingResponse>('/api/agent/greeting', {
+    method: 'POST',
+    body: { session_id: sessionId },
+  });
 }
 
 // REQ-API-03

@@ -58,7 +58,7 @@ other to agree at runtime):
   lane B owns the rename; lane A's `app/asistente-prestamos.tsx` pushes to
   `/asistente` with its existing `intent` param (`la-mesa` / `saving-bags`),
   unchanged from today's `app/dashboard.tsx` behavior.
-- Lane A's Inicio dashboard wires: the dark "Asistente de Préstamos IA"
+- Lane A's Inicio dashboard wires: the dark "Asistente de Préstamos"
   banner → `router.push('/asistente-prestamos')` (see decision below); quick
   actions Ahorros → `/apartados`, Préstamos → `/prestamos`, Transferir →
   `/transferir`. Route groups (`(tabs)`) don't affect the URL, so these paths
@@ -71,7 +71,7 @@ intermediate routing panel: two cards (La Mesa / Saving Bags) that each push
 to the assistant with a specific `intent`, plus a general "Habla con tu
 asistente" CTA. That role doesn't change. What changes is *how it's reached*:
 instead of being the post-login landing screen, it becomes the destination of
-the new Figma dashboard's "Asistente de Préstamos IA" banner (confirmed with
+the new Figma dashboard's "Asistente de Préstamos" banner (confirmed with
 the user 2026-09-12 — the banner was originally speced to route straight to
 the Soporte IA tab; it now routes here first, since this screen's whole job
 is figuring out which specific thing the user wants before handing off to the
