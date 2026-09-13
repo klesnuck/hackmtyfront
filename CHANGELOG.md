@@ -267,3 +267,23 @@
 - rationale: A client coordination bug, not a backend one, and the only reliable guard is a synchronous lock shared across the screen and the action bus. Rejected alternatives: keeping `isSending` + a local ref (doesn't cover `actionBus`), `AbortController`-only (still sends the second request), backend dedup (out of scope). Trade-off: a surface action pressed while busy is ignored, not queued; the surface stays visible and can be pressed again after the response.
 - impact: New OpenSpec change `serialize-assistant-turns` (ADDED `mobile/assistant` turn-serialization requirements; MODIFIED `mobile/a2ui-engine` to gate actions). `mobile/assistant` is still pending from `add-assistant-orb-screen`/`add-assistant-initial-greeting`, so archive together. `npm run typecheck` clean. `npm run lint` could not run in this environment due to a pre-existing `unrs-resolver` native-binding failure (`Cannot find native binding`, npm optional-deps bug), not caused by this change.
 - follow_ups: Run `npm run lint` after repairing the eslint resolver; run `npx @fission-ai/openspec validate`; manual double-fire checks (double-tap send, mic-during-send, send-during-record, action-during-send) against the backend.
+
+## [2026-09-13] fix — loan comparison cards label and mark payment terms
+- agent: opencode / deepseek-flash
+- requirements: `openspec/changes/show-loan-term-cards` (proposed); backend `term_options`
+- invariants: none (same component/props; no transport change)
+- files: `src/catalog/standard/ScenarioComparison.tsx`, `openspec/changes/show-loan-term-cards/`
+- decision: After a loan offer the comparison cards rendered the backend's debt-payoff scenarios; for a debt-free user every card read "Plazo 1 meses / Interés total $0". The frontend was faithful (it reads `payoffMonths`/`totalInterest` and passes arrays through), so the fix is the backend serving engine-backed **plazo** options (see the backend CHANGELOG). On the client, `ScenarioComparison` now hides the generic "Plazo" row when a card's label is already a term (`/^\d+ meses$/i`) and adds a "Recomendado" tag on the highlighted term card; debt-scenario labels ("Pago mínimo", "Abono extra $X/mes") keep the "Plazo" row unchanged. No client-side recomputation.
+- rationale: The term is the card title for plazo cards, so repeating it in a "Plazo" row is noise; making the recommended term explicit turns the highlight into a clear choice. Keeping the same component and props avoids a catalog/wire change.
+- impact: New OpenSpec change `show-loan-term-cards` (ADDED `mobile/loans-assistant` "terminal offer compares loan payment terms"; ADDED `mobile/catalog-standard` term-card labeling). `npm run typecheck` clean; `npx @fission-ai/openspec validate --all` 19/19. `npm run lint` still blocked by the pre-existing `unrs-resolver` native-binding failure. Depends on the backend change (separate repo); renders the old cards until it lands.
+- follow_ups: Run `npm run lint` after repairing the eslint resolver; manual check with `u_don` (plazo cards with real values) and a debt persona (La Mesa debt scenarios unchanged).
+
+## [2026-09-13] fix — show the personalized recommended plazo and its reason
+- agent: opencode / deepseek-flash
+- requirements: `openspec/changes/show-loan-term-cards` (proposed); backend `recommend_term`
+- invariants: none (same component/props; no transport change)
+- files: `src/catalog/standard/ScenarioComparison.tsx`, `openspec/changes/show-loan-term-cards/`
+- decision: The highlighted card now reflects the backend's per-applicant recommendation (profile, payment likelihood/behavior, requested amount) instead of a fixed 24, and shows the recommended card's optional `note` (the reason). The offer's own term matches the recommendation on the backend. On the client, `ScenarioComparison` reads the optional `note` from a scenario and renders it as a small caption; the term-label/recommended-tag behavior from the earlier change is unchanged.
+- rationale: The user requires the recommended plazo to vary and to be explained; the note makes the choice legible. `scenarios` is an `any` prop, so no catalog/registry change was needed.
+- impact: `openspec/changes/show-loan-term-cards` updated (personalized recommendation + optional note). `npm run typecheck` clean; `npx @fission-ai/openspec validate --all` green (19/19). `npm run lint` still blocked by the pre-existing `unrs-resolver` native-binding failure. Depends on the backend change (separate repo).
+- follow_ups: Run `npm run lint` after repairing the eslint resolver; manual check that the reason caption renders on the recommended card.
