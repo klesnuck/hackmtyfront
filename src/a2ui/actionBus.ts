@@ -17,6 +17,7 @@ export async function dispatchA2UIAction(
   dataModel: unknown,
   scope?: unknown,
   extraContext?: Record<string, unknown>,
+  onLoanRequest?: (resolvedContext: Record<string, unknown>) => void,
 ) {
   const eventDef = node.action?.event;
   if (!eventDef) return; // node has no server-bound action (may be a local functionCall instead)
@@ -24,6 +25,16 @@ export async function dispatchA2UIAction(
   const resolvedContext: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(eventDef.context ?? {})) {
     resolvedContext[key] = resolveDynamic(value, dataModel, scope);
+  }
+
+  // Routing exception: request_loan (emitted by LoanOffer) is client-routed (API_KNOWLEDGE.md §3)
+  if (eventDef.name === 'request_loan') {
+    if (onLoanRequest) {
+      onLoanRequest({ ...resolvedContext, ...extraContext });
+    } else if (__DEV__) {
+      console.warn('[actionBus] request_loan action dispatched without onLoanRequest handler');
+    }
+    return;
   }
 
   const response = await sendAction({
@@ -35,3 +46,4 @@ export async function dispatchA2UIAction(
 
   useA2UIStore.getState().applyMessages(response.a2ui);
 }
+

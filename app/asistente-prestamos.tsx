@@ -32,6 +32,13 @@ export default function AsistentePrestamosScreen() {
       onPress: () => router.push({ pathname: '/asistente', params: { intent: 'la-mesa' } }),
     },
     {
+      key: 'prestamo-nuevo',
+      icon: 'cash-outline',
+      title: 'Solicitar un préstamo nuevo',
+      subtitle: 'Consulta inteligente y crédito inmediato',
+      onPress: () => router.push({ pathname: '/asistente', params: { intent: 'prestamo-nuevo' } }),
+    },
+    {
       key: 'saving-bags',
       icon: 'save-outline',
       title: 'Nueva meta de ahorro',
@@ -39,6 +46,7 @@ export default function AsistentePrestamosScreen() {
       onPress: () => router.push({ pathname: '/asistente', params: { intent: 'saving-bags' } }),
     },
   ];
+
 
   return (
     <SafeAreaView style={styles.screen} edges={['top', 'bottom']}>

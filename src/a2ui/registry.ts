@@ -36,7 +36,12 @@ export type BasicNodeType =
   | 'CheckBox'
   | 'ChoicePicker'
   | 'Slider'
-  | 'DateTimeInput';
+  | 'DateTimeInput'
+  | 'Heading'
+  | 'Badge'
+  | 'ProgressBar'
+  | 'LoanOffer';
+
 
 export type CatalogRegistry = Record<BasicNodeType, ComponentType<A2UINodeProps>>;
 

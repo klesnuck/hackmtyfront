@@ -83,6 +83,8 @@ type A2UISurfaceProps = {
    * visual skin renders it) — see SurfaceState in types.ts.
    */
   catalogId?: CatalogId;
+  /** Optional handler for client-routed `request_loan` action. */
+  onLoanRequest?: (resolvedContext: Record<string, unknown>) => void;
 };
 
 /**
@@ -91,7 +93,7 @@ type A2UISurfaceProps = {
  * surface appears — the live assistant screen, and the read-only Kill Test
  * viewer (MOBILE_ARCHITECTURE.md §8).
  */
-export function A2UISurface({ surfaceId, catalogId }: A2UISurfaceProps) {
+export function A2UISurface({ surfaceId, catalogId, onLoanRequest }: A2UISurfaceProps) {
   const surface = useSurface(surfaceId);
   const activeCatalogId = useActiveCatalogId();
   if (!surface) return null;
@@ -103,12 +105,14 @@ export function A2UISurface({ surfaceId, catalogId }: A2UISurfaceProps) {
         catalogId: catalogId ?? activeCatalogId,
         dataModel: surface.dataModel,
         components: surface.components,
+        onLoanRequest,
       }}
     >
       <A2UINodeById id="root" />
     </A2UISurfaceProvider>
   );
 }
+
 
 const styles = StyleSheet.create({
   unknown: {

@@ -12,6 +12,10 @@ import { Slider } from '../standard/Slider';
 import { Tabs } from '../standard/Tabs';
 import { TextField } from '../standard/TextField';
 import { Video } from '../standard/Video';
+import { Badge } from '../standard/Badge';
+import { Heading } from '../standard/Heading';
+import { LoanOffer } from '../standard/LoanOffer';
+import { ProgressBar } from '../standard/ProgressBar';
 import { Button } from './Button';
 import { Text } from './Text';
 
@@ -47,7 +51,12 @@ const vozColorCatalog: CatalogRegistry = {
   ChoicePicker,
   Slider,
   DateTimeInput,
+  Heading,
+  Badge,
+  ProgressBar,
+  LoanOffer,
 };
+
 
 registerCatalog('voz-color', vozColorCatalog);
 

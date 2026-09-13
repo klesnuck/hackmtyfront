@@ -194,3 +194,94 @@ export type TransferResponse = {
   saved_recipient: Recipient | null;
   issues: string[];
 };
+
+// --- Loans & Credits consult (API_KNOWLEDGE.md §6) ---
+// A2UIMessage already imported above (line 11).
+
+export type LoansGreetingPayload = {
+  status: 'ok' | 'error';
+  session_id: string;
+  response_text: string;
+  audio_id: string | null;
+  audio_ref: string | null;
+  terminal_response: null;
+};
+
+export type LoansConsultPayload = {
+  status: 'ok' | 'error';
+  loan_request_id: string;
+  response_text: string;
+  confidence: number;
+  audio_id: string | null;
+  audio_ref: string | null;
+  terminal_response: {
+    catalog_id: string;
+    surface_id: string;
+    a2ui: A2UIMessage[];
+  } | null;
+};
+
+export type LoansConsultRequest = {
+  session_id: string;
+  text?: string;
+  audio_b64?: string;
+  language?: string;
+  loan_request_id?: string | null;
+};
+
+export type LoanScheduleRow = {
+  month: number;
+  payment: number;
+  interest: number;
+  principal: number;
+  balance: number;
+};
+
+export type LoanTerms = {
+  amount: number;
+  apr: number;
+  termMonths: number;
+  monthlyPayment: number;
+  totalInterest: number;
+  totalCost: number;
+  cat: number;
+  openingFee?: number;
+  insuranceFee?: number;
+  schedule: LoanScheduleRow[];
+};
+
+export type LoanRisk = {
+  dti: { existing: number | null; withOffer: number | null; cap: number; flag: boolean };
+  surplus: { monthly: number; discretionarySpend: number; subscriptions: number; minPayment: number };
+  liquidityBufferMonths: number | null;
+  relativeCost: { offeredApr: number; worstExistingApr: number; aprFloor: number; worse: boolean };
+  incomeStability: { coefficientOfVariation: number; flag: boolean };
+  payrollDeduction: { applied: boolean; netPerPeriod: number | null };
+  savingsImpact: {
+    goal: string;
+    monthsBefore: number | null;
+    monthsAfter: number | null;
+    delayedMonths: number | null;
+  } | null;
+  paymentHistory: {
+    available: boolean;
+    onTimeRatio?: number;
+    late?: number;
+    missed?: number;
+    projectedScoreDelta: number;
+  };
+};
+
+export type LoansCreateRequest = {
+  user_id: string;
+  amount: number;
+  months?: number;
+  loan_request_id?: string;
+};
+
+export type LoanResponse = {
+  status: 'ok' | 'error';
+  loan: (LoanTerms & { id: string; userId: string }) | null;
+  issues?: string[];
+};
+

@@ -15,6 +15,11 @@ import { Text } from './Text';
 import { TextField } from './TextField';
 import { Video } from './Video';
 
+import { Badge } from './Badge';
+import { Heading } from './Heading';
+import { LoanOffer } from './LoanOffer';
+import { ProgressBar } from './ProgressBar';
+
 /**
  * The default catalog — implements the full A2UI "basic" vocabulary
  * (https://a2ui.org basic/catalog.json) with our own React Native components,
@@ -39,7 +44,12 @@ const standardCatalog: CatalogRegistry = {
   ChoicePicker,
   Slider,
   DateTimeInput,
+  Heading,
+  Badge,
+  ProgressBar,
+  LoanOffer,
 };
+
 
 registerCatalog('standard', standardCatalog);
 

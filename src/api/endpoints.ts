@@ -142,3 +142,62 @@ export function createRecipient(request: RecipientCreateRequest): Promise<Recipi
 export function submitTransfer(request: TransferRequest): Promise<TransferResponse> {
   return apiRequest<TransferResponse>('/api/transfers', { method: 'POST', body: request });
 }
+
+// --- Loans & Credits consult (API_KNOWLEDGE.md §6) ---
+
+import Constants from 'expo-constants';
+import { parseMultipartJsonPart } from './multipart';
+import type {
+  LoanResponse,
+  LoansConsultPayload,
+  LoansConsultRequest,
+  LoansCreateRequest,
+  LoansGreetingPayload,
+} from './types';
+
+function getLoanBaseUrl(): string {
+  const fromConfig = Constants.expoConfig?.extra?.apiBaseUrl;
+  if (typeof fromConfig === 'string' && fromConfig.length > 0) return fromConfig;
+  return 'http://localhost:8000';
+}
+
+/** POST /api/loans/greeting — multipart response (payload JSON + optional audio). */
+export async function loansGreeting(userId: string): Promise<LoansGreetingPayload> {
+  const response = await fetch(`${getLoanBaseUrl()}/api/loans/greeting`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ user_id: userId }),
+  });
+  if (!response.ok) {
+    throw new Error(`loansGreeting failed: ${response.status}`);
+  }
+  const payload = await parseMultipartJsonPart<LoansGreetingPayload>(response, 'payload');
+  if (!payload) throw new Error('loansGreeting: could not parse payload part');
+  return payload;
+}
+
+/** POST /api/loans/consult — multipart response (payload JSON + optional audio). */
+export async function loansConsult(request: LoansConsultRequest): Promise<LoansConsultPayload> {
+  const response = await fetch(`${getLoanBaseUrl()}/api/loans/consult`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(request),
+  });
+  if (!response.ok) {
+    throw new Error(`loansConsult failed: ${response.status}`);
+  }
+  const payload = await parseMultipartJsonPart<LoansConsultPayload>(response, 'payload');
+  if (!payload) throw new Error('loansConsult: could not parse payload part');
+  return payload;
+}
+
+/** POST /api/loans — create + disburse a loan (manual, irreversible). */
+export function createLoan(request: LoansCreateRequest): Promise<LoanResponse> {
+  return apiRequest<LoanResponse>('/api/loans', { method: 'POST', body: request });
+}
+
+/** GET /api/loans/{loan_request_id} — hydrated terminal consult (JSON). */
+export function getLoanRequest(loanRequestId: string): Promise<LoansConsultPayload> {
+  return apiRequest<LoansConsultPayload>(`/api/loans/${encodeURIComponent(loanRequestId)}`);
+}
+
