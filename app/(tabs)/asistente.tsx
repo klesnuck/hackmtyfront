@@ -1,6 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useQueryClient } from '@tanstack/react-query';
-import Constants from 'expo-constants';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
@@ -19,7 +18,7 @@ import Animated, { FadeInUp } from 'react-native-reanimated';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { A2UISurface, useA2UIStore } from '../../src/a2ui';
 import { ApiError } from '../../src/api/client';
-import { agentGreeting, createLoan, sendMessage } from '../../src/api/endpoints';
+import { agentGreeting, createLoan, getApiBaseUrl, sendMessage } from '../../src/api/endpoints';
 import { AnimatedPressable } from '../../src/catalog/shared/AnimatedPressable';
 import { AnimatedOrb } from '../../src/features/assistant-orb/AnimatedOrb';
 import { detectsLoanIntent } from '../../src/features/loans/detectsLoanIntent';
@@ -76,7 +75,7 @@ export default function AsistenteScreen() {
   const greetedForSessionRef = useRef<string | null>(null);
   const isPressingMicRef = useRef(false);
 
-  const baseUrl = (Constants.expoConfig?.extra?.apiBaseUrl as string | undefined) ?? '';
+  const baseUrl = getApiBaseUrl();
   const hasIntentPrompt = Boolean(intent && INTENT_PROMPTS[intent]);
   const isActive = turns.length > 0 || manualActive || hasIntentPrompt;
   const isRecording = speech.state !== 'idle';
@@ -141,7 +140,15 @@ export default function AsistenteScreen() {
   };
 
   const submitText = async (text: string, { showUserBubble = true }: { showUserBubble?: boolean } = {}) => {
-    if (!text.trim() || !beginTurn()) return;
+    if (!text.trim()) return;
+    if (!beginTurn()) {
+      appendTurn({
+        id: `system-${Date.now()}`,
+        role: 'system',
+        text: 'Estoy terminando la respuesta anterior. Intenta de nuevo en un momento.',
+      });
+      return;
+    }
     if (showUserBubble) {
       appendTurn({ id: `user-${Date.now()}`, role: 'user', text });
     }
@@ -189,7 +196,7 @@ export default function AsistenteScreen() {
         const response = await sendMessage({ session_id: sessionId, text });
         applyMessages(response.a2ui);
         appendTurn({ id: `agent-${Date.now()}`, role: 'agent', surfaceId: response.surface_id });
-        if (response.audio_ref && catalogId === 'voz-color') {
+        if (response.audio_ref) {
           void playAudioAsset(response.audio_ref, baseUrl);
         }
       }
@@ -206,12 +213,31 @@ export default function AsistenteScreen() {
 
   const handleMicPressIn = async () => {
     isPressingMicRef.current = true;
-    if (useUiStore.getState().turnInFlight || speech.state !== 'idle') return;
+    if (useUiStore.getState().turnInFlight) {
+      isPressingMicRef.current = false;
+      appendTurn({
+        id: `system-${Date.now()}`,
+        role: 'system',
+        text: 'Estoy terminando la respuesta anterior. Intenta de nuevo en un momento.',
+      });
+      return;
+    }
+    if (speech.state !== 'idle') return;
+    if (!speech.isSupported) {
+      isPressingMicRef.current = false;
+      appendTurn({
+        id: `system-${Date.now()}`,
+        role: 'system',
+        text: 'El dictado de voz no está disponible en esta versión de la app.',
+      });
+      return;
+    }
     try {
       await speech.start();
       if (!isPressingMicRef.current) {
         const transcript = await speech.stop();
         if (transcript) void submitText(transcript, { showUserBubble: false });
+        else appendTurn({ id: `system-${Date.now()}`, role: 'system', text: 'No te escuché. Intenta de nuevo.' });
       }
     } catch {
       appendTurn({ id: `system-${Date.now()}`, role: 'system', text: 'No se pudo acceder al micrófono.' });
@@ -220,10 +246,12 @@ export default function AsistenteScreen() {
 
   const handleMicPressOut = async () => {
     isPressingMicRef.current = false;
-    if (useUiStore.getState().turnInFlight) return;
+    // Always end recognition even if a background turn holds the lock — the
+    // transcript must be captured; only the *send* is gated by the lock.
     if (speech.isListening) {
       const transcript = await speech.stop();
       if (transcript) void submitText(transcript, { showUserBubble: false });
+      else appendTurn({ id: `system-${Date.now()}`, role: 'system', text: 'No te escuché. Intenta de nuevo.' });
     }
   };
 
@@ -267,71 +295,58 @@ export default function AsistenteScreen() {
 
   // Greet proactively when the Asistente tab is opened without an explicit
   // intent — the bottom-nav tab and the Inicio banner both land here with none.
-  useFocusEffect(
-    useCallback(() => {
-      if (intent || !sessionId || turns.length > 0) return;
-      if (greetedForSessionRef.current === sessionId) return;
-      if (!beginTurn()) return; // a user turn already claimed the conversation
-      greetedForSessionRef.current = sessionId;
-      let cancelled = false;
+  // The greeting is never cancelled by re-renders, and it marks the session
+  // greeted only on success, so a transient failure retries on the next focus.
+  const greetIfNeeded = useCallback(
+    async (sid: string) => {
+      if (intent || greetedForSessionRef.current === sid) return;
+      if (!beginTurn()) return; // a user turn already claimed the conversation; retry next focus
 
-      // Fallback for a backend that predates POST /api/agent/greeting: start the
-      // conversation with the existing /api/message turn instead of dead-ending.
-      const fallbackToMessage = async () => {
-        const response = await sendMessage({ session_id: sessionId, text: 'Hola' });
-        if (cancelled) return;
-        if (Array.isArray(response.a2ui) && response.a2ui.length > 0) {
-          applyMessages(response.a2ui);
-        }
-        if (response.surface_id) {
-          setTurns((prev) => [
-            ...prev,
-            { id: `agent-${Date.now()}`, role: 'agent', surfaceId: response.surface_id },
-          ]);
-        }
-        if (response.audio_ref && catalogId === 'voz-color') {
-          void playAudioAsset(response.audio_ref, baseUrl);
-        }
-      };
+      const appendSystem = (text: string) =>
+        setTurns((prev) => [...prev, { id: `system-${Date.now()}`, role: 'system', text }]);
 
-      void (async () => {
-        try {
-          const greeting = await agentGreeting(sessionId);
-          if (cancelled) return;
-          if (greeting.assistant_text) {
-            setTurns((prev) => [
-              ...prev,
-              { id: `system-${Date.now()}`, role: 'system', text: greeting.assistant_text },
-            ]);
-          }
-          if (greeting.audio_ref && catalogId === 'voz-color') {
-            void playAudioAsset(greeting.audio_ref, baseUrl);
-          }
-        } catch (error) {
-          // The dedicated greeting route may not be deployed (404) or the
-          // backend may be unreachable (status 0): fall back to /api/message.
-          const missingEndpoint =
-            error instanceof ApiError && (error.status === 404 || error.status === 0);
-          if (!missingEndpoint) {
-            greetedForSessionRef.current = null; // allow a retry on next focus
-            if (__DEV__) console.warn('[asistente] greeting failed:', error);
-            return;
-          }
+      try {
+        const greeting = await agentGreeting(sid);
+        greetedForSessionRef.current = sid;
+        if (greeting.assistant_text) appendSystem(greeting.assistant_text);
+        if (greeting.audio_ref) void playAudioAsset(greeting.audio_ref, baseUrl);
+      } catch (error) {
+        // The dedicated greeting route may not be deployed (404) or the backend
+        // may be unreachable (status 0): fall back to the existing /api/message.
+        const missingEndpoint =
+          error instanceof ApiError && (error.status === 404 || error.status === 0);
+        if (!missingEndpoint) {
+          if (__DEV__) console.warn('[asistente] greeting failed:', error);
+        } else {
           try {
-            await fallbackToMessage();
+            const response = await sendMessage({ session_id: sid, text: 'Hola' });
+            greetedForSessionRef.current = sid;
+            if (Array.isArray(response.a2ui) && response.a2ui.length > 0) {
+              applyMessages(response.a2ui);
+            }
+            if (response.surface_id) {
+              setTurns((prev) => [
+                ...prev,
+                { id: `agent-${Date.now()}`, role: 'agent', surfaceId: response.surface_id },
+              ]);
+            }
+            if (response.audio_ref) void playAudioAsset(response.audio_ref, baseUrl);
           } catch (fallbackError) {
-            greetedForSessionRef.current = null;
             if (__DEV__) console.warn('[asistente] fallback greeting failed:', fallbackError);
           }
-        } finally {
-          endTurn();
         }
-      })();
+      } finally {
+        endTurn();
+      }
+    },
+    [intent, baseUrl, beginTurn, endTurn, applyMessages],
+  );
 
-      return () => {
-        cancelled = true;
-      };
-    }, [intent, sessionId, turns.length, catalogId, baseUrl, beginTurn, endTurn]),
+  useFocusEffect(
+    useCallback(() => {
+      if (!sessionId || intent || turns.length > 0) return;
+      void greetIfNeeded(sessionId);
+    }, [sessionId, intent, turns.length, greetIfNeeded]),
   );
 
   useEffect(() => {
