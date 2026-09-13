@@ -61,3 +61,15 @@ when no speech was recognized or dictation is unavailable in the build.
 #### Scenario: Unsupported build
 - **WHEN** the native speech-recognition module is not present
 - **THEN** the user is told dictation is unavailable
+
+### Requirement: The idle greeting addresses the user by name when known
+The idle subtitle SHALL use the session user's first name when the profile is
+available, and SHALL fall back to a generic greeting otherwise.
+
+#### Scenario: Profile available
+- **WHEN** the assistant idle panel renders and the user's profile has a name
+- **THEN** the subtitle greets them by first name
+
+#### Scenario: Profile unavailable
+- **WHEN** the profile is loading or missing
+- **THEN** the subtitle uses a generic greeting

@@ -356,3 +356,13 @@
 - rationale: A trailing slash in a tunnel origin must not silently disable the assistant. The greeting/lock/mic fixes remove the intermittent "it looks like it's sending but nothing happens" states without queueing turns (feedback + watchdog, per product choice).
 - impact: `npm run typecheck` clean; `npx @fission-ai/openspec validate --all` 24/24. `npm run lint` still blocked by the pre-existing `unrs-resolver` native-binding failure. Depends on the backend change for audio-for-all.
 - follow_ups: Manual: force a trailing-slash base and confirm no `//`; greeting once per session for every persona incl. blur/refocus; busy send feedback; mic always ends; standard user hears audio.
+
+## [2026-09-13] fix — named idle greeting + redirect to the new loan after confirming
+- agent: opencode / deepseek-flash
+- requirements: `openspec/changes/personalized-loans-and-list`, `openspec/changes/fix-api-base-url-and-assistant-greeting` (updated)
+- invariants: no A2UI wire change
+- files: `app/(tabs)/asistente.tsx`, `openspec/changes/{personalized-loans-and-list,fix-api-base-url-and-assistant-greeting,add-loans-consult-flow}/`
+- decision: (1) The idle subtitle hardcoded "Hola Daniela"; it now reads the session user's first name from the shared `['profile', userId]` query (already cached by the dashboard) and falls back to a generic greeting while loading/missing. (2) Confirming "Confirmar y recibir fondos" no longer just closes the modal: on success it invalidates liabilities/accounts, resets the loans consult state (`loanConsult.reset()`), returns the panel to idle (`panelState`/`mode`), and navigates to the newly created loan's personalized page (`/loan/[id]`). Also reconciled the stale `add-loans-consult-flow` a2ui-engine MODIFIED delta, which predated the turn-lock scenarios now in the deployed spec (it was failing `openspec validate`).
+- rationale: The greeting should address the actual user; and creating a loan should land the user on its detail page (the point of the per-loan UI), with the consult/panel cleared so returning shows the idle greeting.
+- impact: `npm run typecheck` clean; `npx @fission-ai/openspec validate --all` 23/23. `npm run lint` still blocked by the pre-existing `unrs-resolver` native-binding failure.
+- follow_ups: Manual: each persona shows its first name; confirming a loan opens `/loan/[id]`; returning to Asistente shows the idle panel.

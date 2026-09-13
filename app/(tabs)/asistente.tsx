@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
@@ -18,7 +18,15 @@ import Animated, { SlideInDown } from 'react-native-reanimated';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { A2UISurface, useA2UIStore } from '../../src/a2ui';
 import { ApiError } from '../../src/api/client';
-import { agentGreeting, createLoan, getApiBaseUrl, sendMessage } from '../../src/api/endpoints';
+import {
+  agentGreeting,
+  createLoan,
+  createSession,
+  getApiBaseUrl,
+  getProfile,
+  sendMessage,
+} from '../../src/api/endpoints';
+import type { MessageRequest, SurfaceResponse } from '../../src/api/types';
 import { AnimatedPressable } from '../../src/catalog/shared/AnimatedPressable';
 import { AnimatedOrb } from '../../src/features/assistant-orb/AnimatedOrb';
 import { SuggestedPrompts } from '../../src/features/assistant-orb/SuggestedPrompts';
@@ -61,27 +69,48 @@ export default function AsistenteScreen() {
   const loanConsult = useLoanConsult();
   const queryClient = useQueryClient();
 
+  const { data: profileData } = useQuery({
+    queryKey: ['profile', userId],
+    queryFn: () => getProfile(userId as string),
+    enabled: !!userId,
+  });
+
   const [mode, setMode] = useState<'la-mesa' | 'loans'>('la-mesa');
   const [panelState, setPanelState] = useState<PanelState>({ kind: 'idle' });
   const [draft, setDraft] = useState('');
   const [showFloatingInput, setShowFloatingInput] = useState(false);
   const [pendingLoanRequest, setPendingLoanRequest] = useState<{ amount: number; months?: number } | null>(null);
   const [isConfirmingLoan, setIsConfirmingLoan] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
 
   const textInputRef = useRef<TextInput>(null);
   const hasSentInitialIntent = useRef(false);
   const greetedForSessionRef = useRef<string | null>(null);
   const isPressingMicRef = useRef(false);
+  const noticeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const baseUrl = getApiBaseUrl();
-  const hasIntentPrompt = Boolean(intent && INTENT_PROMPTS[intent]);
-  const isActive = turns.length > 0 || manualActive || hasIntentPrompt;
+  const firstName = profileData?.profile?.name?.trim().split(/\s+/)[0] ?? null;
   const isRecording = speech.state !== 'idle';
   const inputBlocked = isSending || isRecording;
+
+  /** Transient, non-blocking feedback (the screen has no message list). */
+  const showNotice = useCallback((text: string) => {
+    setNotice(text);
+    if (noticeTimerRef.current) clearTimeout(noticeTimerRef.current);
+    noticeTimerRef.current = setTimeout(() => setNotice(null), 4000);
+  }, []);
 
   useEffect(() => {
     loanConsult.setBaseUrl(baseUrl);
   }, [baseUrl, loanConsult]);
+
+  useEffect(
+    () => () => {
+      if (noticeTimerRef.current) clearTimeout(noticeTimerRef.current);
+    },
+    [],
+  );
 
   const handleLoanRequestFromCatalog = useCallback((ctx: Record<string, unknown>) => {
     const amount = Number(ctx.amount ?? 0);
@@ -127,11 +156,20 @@ export default function AsistenteScreen() {
       });
 
       if (res.status === 'ok') {
+        const loanId = res.loan?.id;
         await Promise.all([
           queryClient.invalidateQueries({ queryKey: ['liabilities', userId] }),
           queryClient.invalidateQueries({ queryKey: ['accounts', userId] }),
         ]);
         setPendingLoanRequest(null);
+        // Clear the consult conversation and panel so returning to Asistente
+        // shows the idle greeting, then open the new loan's own page.
+        loanConsult.reset();
+        setPanelState({ kind: 'idle' });
+        setMode('la-mesa');
+        if (loanId) {
+          router.push({ pathname: '/loan/[id]', params: { id: loanId } });
+        }
       } else if (__DEV__) {
         console.warn('[asistente] loan creation failed:', res.issues?.[0]);
       }
@@ -143,18 +181,11 @@ export default function AsistenteScreen() {
     }
   };
 
-  const submitText = async (text: string, { showUserBubble = true }: { showUserBubble?: boolean } = {}) => {
+  const submitText = async (text: string) => {
     if (!text.trim()) return;
     if (!beginTurn()) {
-      appendTurn({
-        id: `system-${Date.now()}`,
-        role: 'system',
-        text: 'Estoy terminando la respuesta anterior. Intenta de nuevo en un momento.',
-      });
+      showNotice('Estoy terminando la respuesta anterior. Intenta de nuevo en un momento.');
       return;
-    }
-    if (showUserBubble) {
-      appendTurn({ id: `user-${Date.now()}`, role: 'user', text });
     }
     setDraft('');
 
@@ -185,7 +216,9 @@ export default function AsistenteScreen() {
         if (!sessionId) return;
         const response = await sendMessageResilient({ session_id: sessionId, text });
         applyMessages(response.a2ui);
-        appendTurn({ id: `agent-${Date.now()}`, role: 'agent', surfaceId: response.surface_id });
+        if (response.surface_id) {
+          setPanelState({ kind: 'surface', surfaceId: response.surface_id });
+        }
         if (response.audio_ref) {
           void playAudioAsset(response.audio_ref, baseUrl);
         }
@@ -202,29 +235,21 @@ export default function AsistenteScreen() {
     isPressingMicRef.current = true;
     if (useUiStore.getState().turnInFlight) {
       isPressingMicRef.current = false;
-      appendTurn({
-        id: `system-${Date.now()}`,
-        role: 'system',
-        text: 'Estoy terminando la respuesta anterior. Intenta de nuevo en un momento.',
-      });
+      showNotice('Estoy terminando la respuesta anterior. Intenta de nuevo en un momento.');
       return;
     }
     if (speech.state !== 'idle') return;
     if (!speech.isSupported) {
       isPressingMicRef.current = false;
-      appendTurn({
-        id: `system-${Date.now()}`,
-        role: 'system',
-        text: 'El dictado de voz no está disponible en esta versión de la app.',
-      });
+      showNotice('El dictado de voz no está disponible en esta versión de la app.');
       return;
     }
     try {
       await speech.start();
       if (!isPressingMicRef.current) {
         const transcript = await speech.stop();
-        if (transcript) void submitText(transcript, { showUserBubble: false });
-        else appendTurn({ id: `system-${Date.now()}`, role: 'system', text: 'No te escuché. Intenta de nuevo.' });
+        if (transcript) void submitText(transcript);
+        else showNotice('No te escuché. Intenta de nuevo.');
       }
     } catch (error) {
       if (__DEV__) console.warn('[asistente] microphone start failed:', error);
@@ -237,8 +262,8 @@ export default function AsistenteScreen() {
     // transcript must be captured; only the *send* is gated by the lock.
     if (speech.isListening) {
       const transcript = await speech.stop();
-      if (transcript) void submitText(transcript, { showUserBubble: false });
-      else appendTurn({ id: `system-${Date.now()}`, role: 'system', text: 'No te escuché. Intenta de nuevo.' });
+      if (transcript) void submitText(transcript);
+      else showNotice('No te escuché. Intenta de nuevo.');
     }
   };
 
@@ -280,13 +305,10 @@ export default function AsistenteScreen() {
       if (intent || greetedForSessionRef.current === sid) return;
       if (!beginTurn()) return; // a user turn already claimed the conversation; retry next focus
 
-      const appendSystem = (text: string) =>
-        setTurns((prev) => [...prev, { id: `system-${Date.now()}`, role: 'system', text }]);
-
       try {
         const greeting = await agentGreeting(sid);
         greetedForSessionRef.current = sid;
-        if (greeting.assistant_text) appendSystem(greeting.assistant_text);
+        // The screen renders no text turns; the greeting is the spoken welcome.
         if (greeting.audio_ref) void playAudioAsset(greeting.audio_ref, baseUrl);
       } catch (error) {
         // The dedicated greeting route may not be deployed (404) or the backend
@@ -297,16 +319,13 @@ export default function AsistenteScreen() {
           if (__DEV__) console.warn('[asistente] greeting failed:', error);
         } else {
           try {
-            const response = await sendMessage({ session_id: sid, text: 'Hola' });
+            const response = await sendMessageResilient({ session_id: sid, text: 'Hola' });
             greetedForSessionRef.current = sid;
             if (Array.isArray(response.a2ui) && response.a2ui.length > 0) {
               applyMessages(response.a2ui);
             }
             if (response.surface_id) {
-              setTurns((prev) => [
-                ...prev,
-                { id: `agent-${Date.now()}`, role: 'agent', surfaceId: response.surface_id },
-              ]);
+              setPanelState({ kind: 'surface', surfaceId: response.surface_id });
             }
             if (response.audio_ref) void playAudioAsset(response.audio_ref, baseUrl);
           } catch (fallbackError) {
@@ -317,14 +336,14 @@ export default function AsistenteScreen() {
         endTurn();
       }
     },
-    [intent, baseUrl, beginTurn, endTurn, applyMessages],
+    [intent, baseUrl, beginTurn, endTurn, applyMessages, sendMessageResilient],
   );
 
   useFocusEffect(
     useCallback(() => {
-      if (!sessionId || intent || turns.length > 0) return;
+      if (!sessionId || intent || panelState.kind !== 'idle') return;
       void greetIfNeeded(sessionId);
-    }, [sessionId, intent, turns.length, greetIfNeeded]),
+    }, [sessionId, intent, panelState.kind, greetIfNeeded]),
   );
 
   const handleIdleSendText = () => {
@@ -354,6 +373,12 @@ export default function AsistenteScreen() {
       </View>
 
       <View style={styles.content}>
+        {notice ? (
+          <View style={styles.noticeBanner} pointerEvents="none">
+            <Text style={styles.noticeText}>{notice}</Text>
+          </View>
+        ) : null}
+
         {panelState.kind === 'surface' ? (
           <Animated.View
             key={panelState.surfaceId}
@@ -387,7 +412,7 @@ export default function AsistenteScreen() {
                     ? speech.partialText || 'Escuchando...'
                     : mode === 'loans'
                       ? 'Te ayudo a evaluar y solicitar tu nuevo crédito de manera transparente.'
-                      : 'Hola Daniela, soy Luna, tu asesora de crédito. Puedo ayudarte con tus dudas o reestructurar tus préstamos.'}
+                      : `${firstName ? `Hola ${firstName}, ` : 'Hola, '}soy Luna, tu asesora de crédito. Puedo ayudarte con tus dudas o reestructurar tus préstamos.`}
                 </Text>
               </View>
 
@@ -587,6 +612,26 @@ const styles = StyleSheet.create({
   },
 
   micWrapper: { alignItems: 'center', justifyContent: 'center' },
+
+  noticeBanner: {
+    position: 'absolute',
+    top: spacing.md,
+    left: spacing.xl,
+    right: spacing.xl,
+    zIndex: 10,
+    backgroundColor: colors.surface.card,
+    borderWidth: 1,
+    borderColor: colors.border.subtle,
+    borderRadius: radius.lg,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.lg,
+    shadowColor: '#000',
+    shadowOpacity: 0.12,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 4,
+  },
+  noticeText: { ...typography.caption, color: colors.text.secondary, textAlign: 'center' },
 
   idleHeaderSection: {
     alignItems: 'center',

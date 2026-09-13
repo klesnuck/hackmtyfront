@@ -28,3 +28,13 @@ taps a row whose source is a created loan; liability rows keep their "Abonar" fl
 #### Scenario: Tapping a loan
 - **WHEN** the user taps a row with source `loan`
 - **THEN** the loan detail screen opens for that loan id
+
+### Requirement: Confirming an application opens the new loan's page
+When the user confirms an in-assistant loan and it is created, the system SHALL
+navigate to that loan's personalized detail page and SHALL reset the assistant's
+consult/panel state so returning to the assistant shows the idle greeting rather
+than the stale terminal surface.
+
+#### Scenario: Loan created from the assistant
+- **WHEN** the user confirms the loan and the backend returns the created loan
+- **THEN** the app navigates to the loan's detail page and clears the consult state
