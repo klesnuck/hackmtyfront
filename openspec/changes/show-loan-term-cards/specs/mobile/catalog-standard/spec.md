@@ -4,10 +4,11 @@
 When a `ScenarioComparison` scenario's `label` is a payment term (for example
 "12 meses"), the system SHALL use it as the card title and SHALL NOT also render
 the generic "Plazo" metric row, so the term is not repeated. When the scenario is
-the highlighted one, the system SHALL mark it as the recommended term and SHALL
-render its optional `note` (a short backend-provided reason) when present. Debt
-scenarios (labels such as "Pago mínimo" or "Abono extra $500/mes") keep the
-"Plazo" row.
+the highlighted one, the system SHALL mark it — as "Recomendado" for the engine's
+pick, or "Tu plazo" when the scenario is flagged `requested` (the term the user
+asked for) — and SHALL render its optional `note` (a short backend-provided
+reason) when present. Debt scenarios (labels such as "Pago mínimo" or "Abono
+extra $500/mes") keep the "Plazo" row.
 
 #### Scenario: Term card
 - **WHEN** a scenario label matches a term like "24 meses"
@@ -16,8 +17,12 @@ scenarios (labels such as "Pago mínimo" or "Abono extra $500/mes") keep the
 
 #### Scenario: Recommended term
 - **WHEN** the highlighted scenario is a term card
-- **THEN** it is marked as recommended and, if it carries a `note`, that reason is
+- **THEN** it is marked "Recomendado" and, if it carries a `note`, that reason is
   shown on the card
+
+#### Scenario: User-requested term
+- **WHEN** the highlighted scenario is flagged `requested`
+- **THEN** it is marked "Tu plazo" instead of "Recomendado"
 
 #### Scenario: Debt scenario unaffected
 - **WHEN** a scenario label is not a term (for example "Pago mínimo")

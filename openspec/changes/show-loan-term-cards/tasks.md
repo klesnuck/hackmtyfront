@@ -1,20 +1,21 @@
 ## 1. Frontend rendering
 
 - [ ] 1.1 `src/catalog/standard/ScenarioComparison.tsx`: hide the "Plazo" row when a scenario label is a term (`/^\d+ meses$/i`); keep it for debt labels.
-- [ ] 1.2 `src/catalog/standard/ScenarioComparison.tsx`: mark the highlighted term card as "Recomendado" and render its optional `note`.
+- [ ] 1.2 `src/catalog/standard/ScenarioComparison.tsx`: mark the highlighted term card ("Recomendado", or "Tu plazo" when `requested`) and render its optional `note`.
 
 ## 2. Backend (separate repo — `amitie/backend`)
 
-- [ ] 2.1 `engine/loan_offer.py`: add `TERM_CANDIDATES` and `term_options(...)` (`recommended_months` flag); include `options` in `propose_offer`'s result.
-- [ ] 2.2 `engine/loan_offer.py`: add `_risk_score`/`recommend_term` deriving the recommended plazo from profile, payment likelihood/behavior and the requested amount (never a fixed term); present the offer at the recommended plazo and attach a short reason.
-- [ ] 2.3 `agent/loans_fallback.py`: add `scenario_component(options)`; build the terminal's `ScenarioComparison` from the offer options, including the recommended card's `note`.
-- [ ] 2.4 `agent/loans.py`: instruct the prompt to use `options` (and the recommendation reason) for `ScenarioComparison` and to allow plazo cards for the `simple` audience; deterministically override the model's scenarios with the engine options before persistence.
-- [ ] 2.5 Tests: `tests/test_loan_offer.py` (option values match `terms_for`; recommendation varies by profile and by requested amount; offer term == recommended term; reason present); `tests/test_loans_consult.py` fallback asserts the 5 plazo cards, the recommended card carries a `note`.
+- [ ] 2.1 `engine/loan_offer.py`: add amount bands (`allowed_terms_for`) and `term_options(..., recommended_months, requested_term)`; include `requested` flags.
+- [ ] 2.2 `engine/loan_offer.py`: `propose_offer(..., requested_term=...)` presents the offer at the selected term (user-requested when given), returns the selected/engine-recommended terms and a `capacity` block.
+- [ ] 2.3 `agent/loans.py`: `_extract_term`, affirmative/negative detection, conversation state (`requested_term`/`term_confirmed`), the deterministic confirmation turn with real implications, and prompt/state consistency.
+- [ ] 2.4 `agent/loans_fallback.py`: scenario object carries `requested`; highlight the selected term; `note` reason.
+- [ ] 2.5 `api/routers/loans.py`: persist/read `requested_term`/`term_confirmed` in `loan_requests.context_json`.
+- [ ] 2.6 `mcp_servers/finance/{service,server}.py`: `compute_loan_offer(requested_term=...)`; `create_loan` honors the chosen term (validated 6–48) instead of forcing the stored one.
+- [ ] 2.7 Tests: engine bands + requested term; consult confirmation→honored flow; `create_loan` term.
 
 ## 3. Verification
 
-- [ ] 3.1 Backend: `python3 -m unittest discover -s tests -t .` green (234 passing).
+- [ ] 3.1 Backend: `python3 -m unittest discover -s tests -t .` green.
 - [ ] 3.2 `npm run typecheck` clean.
-- [ ] 3.3 `npm run lint` clean (currently blocked in this environment by a pre-existing `unrs-resolver` native-binding failure).
-- [ ] 3.4 `npx -y @fission-ai/openspec validate --all` green.
-- [ ] 3.5 Manual: consult with the seeded personas and confirm the recommended plazo varies (e.g. `u_don`/`u_roberto` shorter, `u_sofia`/`u_carmen` longer) and the `LoanOffer` headline term matches the highlighted card.
+- [ ] 3.3 `npx -y @fission-ai/openspec validate --all` green.
+- [ ] 3.4 Manual: small-amount offer shows only short plazos; stating a term yields a confirmation with real implications; confirming builds the loan at that term; the conversation stays consistent across turns.

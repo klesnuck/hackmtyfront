@@ -24,6 +24,30 @@ try {
 }
 
 /**
+ * iOS keeps the AVAudioSession in the recognizer's `playAndRecord`/`measurement`
+ * state after the mic, which routes later playback through the quiet earpiece /
+ * voice-processed path. Reset it to media playback before the reply's TTS plays.
+ */
+function resetPlaybackSession(): void {
+  try {
+    NativeSpeechModule?.setAudioSessionActiveIOS?.(false, { notifyOthersOnDeactivation: true });
+    NativeSpeechModule?.setCategoryIOS?.({
+      category: 'playback',
+      categoryOptions: [],
+      mode: 'default',
+    });
+  } catch {
+    // iOS-only helpers — ignore on Android / Expo Go.
+  }
+  void setAudioModeAsync({
+    playsInSilentMode: true,
+    allowsRecording: false,
+    shouldRouteThroughEarpiece: false,
+    interruptionMode: 'doNotMix',
+  });
+}
+
+/**
  * Mic capture for the Asistente IA screen:
  * On-device speech-to-text via `expo-speech-recognition` when running in a custom dev build,
  * with a safe fallback when running inside standard Expo Go so the app never crashes on startup.
@@ -80,7 +104,7 @@ export function useSpeechToText() {
 
     // Speech recognition switches the audio session to a recording category;
     // restore media playback so the assistant's reply is audible on iOS.
-    void setAudioModeAsync({ playsInSilentMode: true, allowsRecording: false });
+    resetPlaybackSession();
 
     const resolveStop = stopWaiterRef.current;
     stopWaiterRef.current = null;
@@ -138,6 +162,11 @@ export function useSpeechToText() {
           lang: RECOGNITION_LANGUAGE,
           interimResults: true,
           continuous: false,
+          iosCategory: {
+            category: 'playAndRecord',
+            categoryOptions: ['defaultToSpeaker'],
+            mode: 'default',
+          },
         });
       });
     } finally {

@@ -186,8 +186,8 @@ export function resolveApiUrl(pathOrUrl: string): string {
   return value.startsWith('/') ? `${getApiBaseUrl()}${value}` : `${getApiBaseUrl()}/${value}`;
 }
 
-/** Consult budgets ~5s server-side; abort a bit later so the fallback still arrives. */
-const LOANS_TIMEOUT_MS = 8000;
+/** Server LLM budget is ~6.5s + TTS; abort later so the fallback still arrives. */
+const LOANS_TIMEOUT_MS = 12000;
 
 async function loansFetch(path: string, body: unknown): Promise<Response> {
   const controller = new AbortController();
