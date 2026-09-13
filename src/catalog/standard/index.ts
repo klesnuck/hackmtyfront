@@ -16,9 +16,14 @@ import { TextField } from './TextField';
 import { Video } from './Video';
 
 import { Badge } from './Badge';
+import { BreakAlert } from './BreakAlert';
+import { ForecastChart } from './ForecastChart';
 import { Heading } from './Heading';
+import { LineChart } from './LineChart';
 import { LoanOffer } from './LoanOffer';
+import { PlanTable } from './PlanTable';
 import { ProgressBar } from './ProgressBar';
+import { ScenarioComparison } from './ScenarioComparison';
 
 /**
  * The default catalog — implements the full A2UI "basic" vocabulary
@@ -48,6 +53,11 @@ const standardCatalog: CatalogRegistry = {
   Badge,
   ProgressBar,
   LoanOffer,
+  ScenarioComparison,
+  PlanTable,
+  ForecastChart,
+  LineChart,
+  BreakAlert,
 };
 
 

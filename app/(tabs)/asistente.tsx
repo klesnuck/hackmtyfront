@@ -22,7 +22,7 @@ import { createLoan, sendMessage } from '../../src/api/endpoints';
 import { AnimatedPressable } from '../../src/catalog/shared/AnimatedPressable';
 import { AnimatedOrb } from '../../src/features/assistant-orb/AnimatedOrb';
 import { detectsLoanIntent } from '../../src/features/loans/detectsLoanIntent';
-import { useLoanConsult } from '../../src/features/loans/useLoanConsult';
+import { loanErrorMessage, useLoanConsult } from '../../src/features/loans/useLoanConsult';
 import { playAudioAsset } from '../../src/features/voice/audioCache';
 import { RecordingPulse } from '../../src/features/voice/RecordingPulse';
 import { useSpeechToText } from '../../src/features/voice/useSpeechToText';
@@ -157,7 +157,13 @@ export default function AsistenteScreen() {
 
         const consultPayload = await loanConsult.send(text, currentSessionId);
 
-        if (consultPayload.terminal_response) {
+        if (consultPayload.status === 'error') {
+          appendTurn({
+            id: `system-${Date.now()}`,
+            role: 'system',
+            text: loanErrorMessage(consultPayload.error_code, consultPayload.message),
+          });
+        } else if (consultPayload.terminal_response) {
           applyMessages(consultPayload.terminal_response.a2ui);
           appendTurn({
             id: `agent-${Date.now()}`,

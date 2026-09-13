@@ -1,4 +1,5 @@
 import { QueryClientProvider } from '@tanstack/react-query';
+import { setAudioModeAsync } from 'expo-audio';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
@@ -26,6 +27,13 @@ export default function RootLayout() {
   useEffect(() => {
     void hydrateFromStorage();
   }, [hydrateFromStorage]);
+
+  // iOS mutes playback by default with the silent switch on, and speech
+  // recognition can leave the audio session in a recording category. Configure
+  // a media playback session once at startup so TTS is audible.
+  useEffect(() => {
+    void setAudioModeAsync({ playsInSilentMode: true, allowsRecording: false });
+  }, []);
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>

@@ -4,14 +4,17 @@ import { StyleSheet, Text as RNText, View } from 'react-native';
 import { useResolve } from '../../a2ui/context';
 import type { A2UINodeProps } from '../../a2ui/registry';
 import type { DynamicString } from '../../a2ui/types';
+import { resolveApiUrl } from '../../api/endpoints';
 import { colors, radius, spacing, typography } from '../../theme/tokens';
 import { AnimatedPressable } from '../shared/AnimatedPressable';
 
 /** Uses expo-audio, not the deprecated expo-av (removed from Expo Go in SDK 55+). */
 export function AudioPlayer({ node, scope }: A2UINodeProps) {
   const resolve = useResolve(scope);
-  const url = resolve(node.url as DynamicString);
+  const rawUrl = resolve(node.url as DynamicString);
   const description = resolve(node.description as DynamicString);
+  // The backend may send a relative `/api/audio/...` ref; resolve it against the origin.
+  const url = rawUrl ? resolveApiUrl(rawUrl) : undefined;
 
   const player = useAudioPlayer(url ?? undefined);
   const status = useAudioPlayerStatus(player);

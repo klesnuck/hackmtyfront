@@ -31,6 +31,11 @@ const ERROR_MESSAGES: Record<string, string> = {
   bad_request: 'Solicitud inválida. Revisa tu mensaje.',
 };
 
+export function loanErrorMessage(code: string | null | undefined, fallback?: string | null): string {
+  if (code && ERROR_MESSAGES[code]) return ERROR_MESSAGES[code];
+  return fallback || 'Algo salió mal. Intenta de nuevo.';
+}
+
 /**
  * Hook managing a single loan consult conversation lifecycle:
  * greeting → intake loop → terminal offer (or not-eligible).
@@ -52,6 +57,8 @@ export function useLoanConsult() {
   });
 
   const baseUrlRef = useRef('');
+  const sessionIdRef = useRef<string | null>(null);
+  const loanRequestIdRef = useRef<string | null>(null);
 
   /** Set the base URL for audio playback. */
   const setBaseUrl = useCallback((url: string) => {
@@ -65,6 +72,8 @@ export function useLoanConsult() {
 
       try {
         const payload = await loansGreeting(userId);
+        sessionIdRef.current = payload.session_id;
+        loanRequestIdRef.current = null;
         setState((prev) => ({
           ...prev,
           status: 'intake',
@@ -73,8 +82,8 @@ export function useLoanConsult() {
           audioRef: payload.audio_ref,
         }));
 
-        if (payload.audio_ref) {
-          void playAudioAsset(payload.audio_ref, baseUrlRef.current);
+        if (payload.audio_id) {
+          void playAudioAsset(payload.audio_id, baseUrlRef.current);
         }
 
         return payload;
@@ -96,9 +105,8 @@ export function useLoanConsult() {
    * on it alone drops the very first message of a session.
    */
   const send = useCallback(
-    async (text: string, sessionIdOverride?: string): Promise<LoansConsultPayload> => {
-      const sessionId = sessionIdOverride ?? state.sessionId;
-      if (!sessionId) {
+    async (text: string): Promise<LoansConsultPayload> => {
+      if (!sessionIdRef.current) {
         throw new Error('useLoanConsult.send: no session — call greet() first');
       }
 
@@ -106,11 +114,14 @@ export function useLoanConsult() {
 
       try {
         const payload = await loansConsult({
-          session_id: sessionId,
+          session_id: sessionIdRef.current,
           text,
           language: 'es-MX',
-          loan_request_id: state.loanRequestId,
+          loan_request_id: loanRequestIdRef.current,
         });
+        if (payload.loan_request_id) {
+          loanRequestIdRef.current = payload.loan_request_id;
+        }
 
         // Handle error status from the backend
         if (payload.status === 'error') {
@@ -149,8 +160,8 @@ export function useLoanConsult() {
           }));
         }
 
-        if (payload.audio_ref) {
-          void playAudioAsset(payload.audio_ref, baseUrlRef.current);
+        if (payload.audio_id) {
+          void playAudioAsset(payload.audio_id, baseUrlRef.current);
         }
 
         return payload;
@@ -160,11 +171,13 @@ export function useLoanConsult() {
         throw err;
       }
     },
-    [state.sessionId, state.loanRequestId],
+    [],
   );
 
   /** Reset the conversation to idle (e.g. when switching tabs or starting fresh). */
   const reset = useCallback(() => {
+    sessionIdRef.current = null;
+    loanRequestIdRef.current = null;
     setState({
       status: 'idle',
       sessionId: null,

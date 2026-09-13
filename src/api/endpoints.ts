@@ -57,13 +57,14 @@ export function getSurface(surfaceId: string): Promise<UiResponse> {
 }
 
 // REQ-API-07 — returns a playable URL, not JSON; see features/voice.
-// `assetId` may be a bare id ("aud_xxx") or an already-prefixed `audio_ref`
-// path ("/api/audio/aud_xxx") as returned by /api/message, /api/loans/*, etc. —
-// callers pass whichever the backend gave them, so both must resolve without
-// duplicating the "/api/audio/" segment.
+// Accepts either a bare asset id (`aud_…`) or the backend's absolute
+// `audio_ref` (`/api/audio/aud_…`) — never prepend `/api/audio/` twice.
 export function getAudioAssetUrl(assetId: string, baseUrl: string): string {
-  if (assetId.startsWith('/api/audio/')) return `${baseUrl}${assetId}`;
-  return `${baseUrl}/api/audio/${encodeURIComponent(assetId)}`;
+  const ref = assetId.trim();
+  if (ref.startsWith('http://') || ref.startsWith('https://')) return ref;
+  if (ref.startsWith('/')) return `${baseUrl.replace(/\/$/, '')}${ref}`;
+  const id = ref.startsWith('api/audio/') ? ref.slice('api/audio/'.length) : ref;
+  return `${baseUrl.replace(/\/$/, '')}/api/audio/${encodeURIComponent(id)}`;
 }
 
 // REQ-API-08
@@ -160,19 +161,48 @@ import type {
   LoansGreetingPayload,
 } from './types';
 
-function getLoanBaseUrl(): string {
+/** The configured backend origin (no trailing slash). */
+export function getApiBaseUrl(): string {
   const fromConfig = Constants.expoConfig?.extra?.apiBaseUrl;
-  if (typeof fromConfig === 'string' && fromConfig.length > 0) return fromConfig;
+  if (typeof fromConfig === 'string' && fromConfig.length > 0) {
+    return fromConfig.replace(/\/$/, '');
+  }
   return 'http://localhost:8000';
+}
+
+/** Resolve a relative API path (e.g. `/api/audio/aud_…`) against the backend origin. */
+export function resolveApiUrl(pathOrUrl: string): string {
+  const value = pathOrUrl.trim();
+  if (/^https?:\/\//i.test(value)) return value;
+  return value.startsWith('/') ? `${getApiBaseUrl()}${value}` : `${getApiBaseUrl()}/${value}`;
+}
+
+/** Consult budgets ~5s server-side; abort a bit later so the fallback still arrives. */
+const LOANS_TIMEOUT_MS = 8000;
+
+async function loansFetch(path: string, body: unknown): Promise<Response> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), LOANS_TIMEOUT_MS);
+  try {
+    return await fetch(`${getApiBaseUrl()}${path}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    });
+  } catch (err) {
+    if ((err as { name?: string }).name === 'AbortError') {
+      throw new Error('La consulta tardó demasiado. Intenta de nuevo.');
+    }
+    throw err;
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 /** POST /api/loans/greeting — multipart response (payload JSON + optional audio). */
 export async function loansGreeting(userId: string): Promise<LoansGreetingPayload> {
-  const response = await fetch(`${getLoanBaseUrl()}/api/loans/greeting`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ user_id: userId }),
-  });
+  const response = await loansFetch('/api/loans/greeting', { user_id: userId });
   if (!response.ok) {
     throw new Error(`loansGreeting failed: ${response.status}`);
   }
@@ -183,11 +213,7 @@ export async function loansGreeting(userId: string): Promise<LoansGreetingPayloa
 
 /** POST /api/loans/consult — multipart response (payload JSON + optional audio). */
 export async function loansConsult(request: LoansConsultRequest): Promise<LoansConsultPayload> {
-  const response = await fetch(`${getLoanBaseUrl()}/api/loans/consult`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(request),
-  });
+  const response = await loansFetch('/api/loans/consult', request);
   if (!response.ok) {
     throw new Error(`loansConsult failed: ${response.status}`);
   }

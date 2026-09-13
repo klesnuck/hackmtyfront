@@ -214,6 +214,10 @@ export type LoansConsultPayload = {
   confidence: number;
   audio_id: string | null;
   audio_ref: string | null;
+  /** Present only when status === 'error'. */
+  error_code?: string | null;
+  message?: string | null;
+  retryable?: boolean;
   terminal_response: {
     catalog_id: string;
     surface_id: string;

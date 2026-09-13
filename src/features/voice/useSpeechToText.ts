@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { setAudioModeAsync } from 'expo-audio';
 import { useUiStore } from '../../state/ui.store';
 
 export type SpeechToTextState = 'idle' | 'requesting-permission' | 'listening' | 'processing';
@@ -72,6 +73,10 @@ export function useSpeechToText() {
     setState('idle');
     setPartialText('');
     setRecordingFlag(false);
+
+    // Speech recognition switches the audio session to a recording category;
+    // restore media playback so the assistant's reply is audible on iOS.
+    void setAudioModeAsync({ playsInSilentMode: true, allowsRecording: false });
 
     const resolveStop = stopWaiterRef.current;
     stopWaiterRef.current = null;
