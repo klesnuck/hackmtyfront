@@ -287,3 +287,23 @@
 - rationale: The user requires the recommended plazo to vary and to be explained; the note makes the choice legible. `scenarios` is an `any` prop, so no catalog/registry change was needed.
 - impact: `openspec/changes/show-loan-term-cards` updated (personalized recommendation + optional note). `npm run typecheck` clean; `npx @fission-ai/openspec validate --all` green (19/19). `npm run lint` still blocked by the pre-existing `unrs-resolver` native-binding failure. Depends on the backend change (separate repo).
 - follow_ups: Run `npm run lint` after repairing the eslint resolver; manual check that the reason caption renders on the recommended card.
+
+## [2026-09-13] fix — iOS reply volume after the mic, and a "Tu plazo" term tag
+- agent: opencode / deepseek-flash
+- requirements: `openspec/changes/fix-ios-audio-playback` and `show-loan-term-cards` (updated)
+- invariants: INV-010 untouched (playback only; no transport change)
+- files: `src/features/voice/useSpeechToText.ts`, `src/features/voice/audioCache.ts`, `app/_layout.tsx`, `src/catalog/standard/ScenarioComparison.tsx`, `openspec/changes/{fix-ios-audio-playback,show-loan-term-cards}/`
+- decision: (1) On iOS the first greeting was loud but every reply after using the mic was quiet: `expo-speech-recognition` leaves `AVAudioSession` in its `playAndRecord`/`measurement` state, so later playback routed through the quiet receiver/voice-processed path. `useSpeechToText` now deactivates the recognizer's session and restores the playback category on end (`setAudioSessionActiveIOS(false)` + `setCategoryIOS({category:'playback',categoryOptions:[],mode:'default'})`) and passes `iosCategory` `{playAndRecord, defaultToSpeaker, default}` on start; `audioCache`/`_layout` set the full playback mode (`shouldRouteThroughEarpiece:false`, `interruptionMode:'doNotMix'`), create players with `keepAudioSessionActive:true`, set `volume=1`, and release them on finish. (2) `ScenarioComparison` now shows "Tu plazo" (instead of "Recomendado") on a card flagged `requested`, which the backend sets for the term the user asked for.
+- rationale: The recognizer's session state, not the audio file, caused the volume drop; explicitly releasing it and forcing speaker playback restores consistent loudness. The term tag distinguishes the engine's pick from the user's own choice.
+- impact: No client-side math; the backend now bands plazos by amount and confirms a user-stated term before offering it. `npm run typecheck` clean; `npx @fission-ai/openspec validate --all` green. `npm run lint` still blocked by the pre-existing `unrs-resolver` native-binding failure. Depends on the backend change (separate repo).
+- follow_ups: Verify on an iOS device: greeting and post-mic replies at equal volume (silent switch on/off); confirming a stated term builds the loan at that term.
+
+## [2026-09-13] change — loans intake flow + 12s client budget
+- agent: opencode / deepseek-flash
+- requirements: `openspec/changes/loans-intake-flow` (proposed); backend intake/deadline changes
+- invariants: INV-010 untouched (HTTP only; no transport change)
+- files: `src/api/endpoints.ts`, `openspec/changes/loans-intake-flow/`
+- decision: Raised the loans client timeout from 8 s to 12 s so the backend's new 6.5 s LLM budget (3.5 s for the intake turn) plus local TTS always lands before the app aborts. Added the frontend OpenSpec change `loans-intake-flow` (`mobile/loans-assistant`): the assistant asks for the amount and purpose before offering, keeps the amount across turns, honors an explicit maximum, and only then renders the terminal offer — an intake turn renders as an assistant message with no surface. No UI code changes: the existing `{response_text, terminal_response: null}` handling covers it.
+- rationale: The backend now keeps the conversation in an intake loop instead of jumping to the maximum when it does not understand; the client budget must accommodate the longer LLM deadline and the deterministic fallback.
+- impact: `npm run typecheck` clean; `npx @fission-ai/openspec validate --all` green. `npm run lint` still blocked by the pre-existing `unrs-resolver` native-binding failure.
+- follow_ups: Manual check on device: "quiero un crédito" asks for the amount; the amount persists; "dame el máximo" offers the maximum.

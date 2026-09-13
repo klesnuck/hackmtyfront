@@ -4,9 +4,10 @@
 
 ## 2. Playback audio session
 
-- [ ] 2.1 `app/_layout.tsx`: on mount, `setAudioModeAsync({ playsInSilentMode: true, allowsRecording: false })`.
-- [ ] 2.2 `src/features/voice/useSpeechToText.ts`: re-assert the playback session in the recognition end handler.
-- [ ] 2.3 `src/features/voice/audioCache.ts`: assert the playback session before playing (defensive).
+- [ ] 2.1 `app/_layout.tsx`: on mount, `setAudioModeAsync({ playsInSilentMode: true, allowsRecording: false, shouldRouteThroughEarpiece: false, interruptionMode: 'doNotMix' })`.
+- [ ] 2.2 `src/features/voice/useSpeechToText.ts`: on recognition end, release the recognizer's iOS session (`setAudioSessionActiveIOS(false)` + `setCategoryIOS(playback/default)`) and re-assert the playback mode.
+- [ ] 2.3 `src/features/voice/useSpeechToText.ts`: on start, pass `iosCategory` `{ playAndRecord, defaultToSpeaker, default }` so recognition doesn't leave a voice-processing mode.
+- [ ] 2.4 `src/features/voice/audioCache.ts`: assert the playback mode before playing (defensive), create the player with `keepAudioSessionActive: true`, set `volume = 1`, and release it when playback finishes.
 
 ## 3. Observability
 

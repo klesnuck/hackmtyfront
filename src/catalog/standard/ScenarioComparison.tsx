@@ -12,6 +12,7 @@ type ScenarioRow = {
   interestSaved?: number;
   monthsSaved?: number;
   note?: string;
+  requested?: boolean;
 };
 
 function money(value: unknown): string {
@@ -48,7 +49,9 @@ export function ScenarioComparison({ node, scope }: A2UINodeProps) {
           return (
             <View key={index} style={[styles.card, highlighted && styles.cardHighlighted]}>
               {highlighted && isTermLabel ? (
-                <Text style={styles.recommendedTag}>Recomendado</Text>
+                <Text style={styles.recommendedTag}>
+                  {scenario.requested ? 'Tu plazo' : 'Recomendado'}
+                </Text>
               ) : null}
               <Text style={[styles.label, highlighted && styles.labelHighlighted]}>{label}</Text>
               <Text style={styles.payment}>{money(scenario.monthlyPayment)}/mes</Text>

@@ -27,14 +27,23 @@ async function getCachedAudioUri(assetId: string, baseUrl: string): Promise<stri
 /**
  * Restore a media playback session. Speech recognition can leave the audio
  * session active in a recording category; on iOS the switch can transiently
- * fail while recognition is tearing down, so retry once.
+ * fail while recognition is tearing down, so retry once. Routing through the
+ * speaker (not the earpiece) and taking exclusive focus keep the reply's
+ * volume consistent with the first greeting.
  */
+const PLAYBACK_MODE = {
+  playsInSilentMode: true,
+  allowsRecording: false,
+  shouldRouteThroughEarpiece: false,
+  interruptionMode: 'doNotMix',
+} as const;
+
 async function ensurePlaybackMode(): Promise<void> {
   try {
-    await setAudioModeAsync({ playsInSilentMode: true, allowsRecording: false });
+    await setAudioModeAsync({ ...PLAYBACK_MODE });
   } catch {
     await new Promise((resolve) => setTimeout(resolve, 150));
-    await setAudioModeAsync({ playsInSilentMode: true, allowsRecording: false });
+    await setAudioModeAsync({ ...PLAYBACK_MODE });
   }
 }
 
@@ -49,7 +58,11 @@ export async function playAudioAsset(assetId: string, baseUrl: string): Promise<
     // speech recognition can leave the session in a recording category.
     await ensurePlaybackMode();
     const localUri = await getCachedAudioUri(assetId, baseUrl);
-    const player = createAudioPlayer(localUri);
+    const player = createAudioPlayer(localUri, { keepAudioSessionActive: true });
+    player.volume = 1;
+    player.addListener('playbackStatusUpdate', (status) => {
+      if (status.didJustFinish) player.remove();
+    });
     player.play();
   } catch (error) {
     if (__DEV__) console.warn('[audio] playAudioAsset failed:', error);

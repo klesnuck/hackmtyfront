@@ -30,3 +30,19 @@ The system SHALL treat audio playback as non-blocking, but SHALL surface a faile
 #### Scenario: Asset cannot be played
 - **WHEN** a TTS asset fails to download, load, or play
 - **THEN** the app continues to function and a development warning is emitted
+
+### Requirement: Playback volume stays consistent after the microphone
+The system SHALL reset the iOS audio session to media playback after on-device speech recognition ends — deactivating the recognizer's session and restoring the playback category/mode — so the assistant's reply is as loud as the first greeting, instead of being routed through the quiet record/voice-processed path. Playback SHALL route through the speaker, not the earpiece, and use exclusive audio focus.
+
+#### Scenario: First greeting
+- **WHEN** the app has just opened and the assistant plays its greeting
+- **THEN** the audio is played through the speaker at full media volume
+
+#### Scenario: Reply immediately after a spoken turn
+- **WHEN** the user records a turn with the microphone and the assistant then plays its reply
+- **THEN** the reply plays at the same volume as the greeting (the recognizer's audio session was released and the playback session restored)
+
+#### Scenario: Explicit playback routing
+- **WHEN** any TTS asset is about to play
+- **THEN** the audio session is configured to not route through the earpiece and to take exclusive focus before the player starts
+

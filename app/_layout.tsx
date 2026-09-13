@@ -30,9 +30,15 @@ export default function RootLayout() {
 
   // iOS mutes playback by default with the silent switch on, and speech
   // recognition can leave the audio session in a recording category. Configure
-  // a media playback session once at startup so TTS is audible.
+  // a media playback session once at startup so TTS is audible through the
+  // speaker (never the quiet earpiece path).
   useEffect(() => {
-    void setAudioModeAsync({ playsInSilentMode: true, allowsRecording: false });
+    void setAudioModeAsync({
+      playsInSilentMode: true,
+      allowsRecording: false,
+      shouldRouteThroughEarpiece: false,
+      interruptionMode: 'doNotMix',
+    });
   }, []);
 
   return (

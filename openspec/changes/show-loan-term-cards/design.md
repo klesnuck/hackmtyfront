@@ -61,11 +61,34 @@ render its `note` when present.
 payment, total interest) and are the core value of the offer; prohibit CAT/DTI/
 charts/risk instead.
 
+**7. Amount-banded plazos.** Long terms on a small loan are pointless, so the
+candidate set comes from `allowed_terms_for(amount)` bands (a small loan gets
+6/12; larger loans add 24/36/48). The selected term and any user-requested term
+are always added. The band uses the **offered** amount (the affordable principal),
+not the raw requested amount.
+
+**8. A user-stated term is confirmed, never ignored.** When the user names a term,
+`_extract_term` records it in the loan conversation state (`requested_term`,
+`term_confirmed`), and until they confirm the backend returns a deterministic
+confirmation turn (`terminal_response = null`) that acknowledges the term and
+states the real implications from the engine (monthly payment, share of income,
+total interest, comparison to the recommendation; if unaffordable, say so). Only
+on confirmation does the terminal build at that term, and `create_loan` honors the
+chosen term instead of overwriting it with the stored offer's. Passing the state
+back into every turn (and re-stating it to the model) keeps the conversation
+consistent across turns.
+
 ## Risks / Trade-offs
 
 - **[Risk]** The recommendation is a heuristic, so it could surprise. → It is
   deterministic, feasibility-gated (never recommends an unaffordable payment),
   always within the 6–48 product range, and carries a plain-language reason.
+- **[Risk]** The confirmation adds a turn before the offer. → It is the point: the
+  user asked for a term and must not be overridden silently; the turn is short and
+  deterministic.
+- **[Risk]** Affirmative detection is keyword-based. → Only consulted when a term
+  is pending; anything else re-asks rather than proceeding, so a false negative is
+  harmless (a re-ask), and a new term in the same message takes precedence.
 - **[Risk]** The `simple` mandate change loosens a prior audience rule. → Scoped
   to the loan-term comparison only; advanced metrics stay excluded.
 - **[Risk]** Overwriting the model's component could conflict with a future
