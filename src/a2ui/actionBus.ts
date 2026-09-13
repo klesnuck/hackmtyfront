@@ -19,6 +19,7 @@ export async function dispatchA2UIAction(
   scope?: unknown,
   extraContext?: Record<string, unknown>,
   onLoanRequest?: (resolvedContext: Record<string, unknown>) => void,
+  onAbonar?: (resolvedContext: Record<string, unknown>) => void,
 ) {
   const eventDef = node.action?.event;
   if (!eventDef) return; // node has no server-bound action (may be a local functionCall instead)
@@ -34,6 +35,16 @@ export async function dispatchA2UIAction(
       onLoanRequest({ ...resolvedContext, ...extraContext });
     } else if (__DEV__) {
       console.warn('[actionBus] request_loan action dispatched without onLoanRequest handler');
+    }
+    return;
+  }
+
+  // Routing exception: abonar is client-routed to the native payment flow.
+  if (eventDef.name === 'abonar') {
+    if (onAbonar) {
+      onAbonar({ ...resolvedContext, ...extraContext });
+    } else if (__DEV__) {
+      console.warn('[actionBus] abonar action dispatched without onAbonar handler');
     }
     return;
   }

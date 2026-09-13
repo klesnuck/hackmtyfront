@@ -80,7 +80,11 @@ export default function PrestamosScreen() {
   const openForm = () => setFormVisible(true);
   const closeForm = () => setFormVisible(false);
   const handleLoanPress = (loan: Loan) => {
-    if (loan.source === 'loan') router.push({ pathname: '/loan/[id]', params: { id: loan.id } });
+    if (loan.source === 'loan') {
+      router.push({ pathname: '/loan/[id]', params: { id: loan.id } });
+    } else {
+      router.push({ pathname: '/liability/[id]', params: { id: loan.id } });
+    }
   };
 
   return (

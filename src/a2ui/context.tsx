@@ -10,6 +10,7 @@ type A2UISurfaceContextValue = {
   dataModel: unknown;
   components: Record<ComponentId, A2UIComponent>;
   onLoanRequest?: (resolvedContext: Record<string, unknown>) => void;
+  onAbonar?: (resolvedContext: Record<string, unknown>) => void;
 };
 
 const A2UISurfaceContext = createContext<A2UISurfaceContextValue | null>(null);
@@ -49,11 +50,20 @@ export function useResolve(scope?: unknown) {
  * to fire its `action.event` back to the agent — the only path to the network.
  */
 export function useDispatchAction(node: A2UIComponent, scope?: unknown) {
-  const { surfaceId, dataModel, onLoanRequest } = useA2UISurfaceContext();
+  const { surfaceId, dataModel, onLoanRequest, onAbonar } = useA2UISurfaceContext();
   return useCallback(
     (extraContext?: Record<string, unknown>) =>
-      dispatchA2UIAction(surfaceId, node.id, node, dataModel, scope, extraContext, onLoanRequest),
-    [surfaceId, node, dataModel, scope, onLoanRequest],
+      dispatchA2UIAction(
+        surfaceId,
+        node.id,
+        node,
+        dataModel,
+        scope,
+        extraContext,
+        onLoanRequest,
+        onAbonar,
+      ),
+    [surfaceId, node, dataModel, scope, onLoanRequest, onAbonar],
   );
 }
 

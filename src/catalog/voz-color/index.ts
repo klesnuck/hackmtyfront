@@ -16,6 +16,8 @@ import { ForecastChart } from '../standard/ForecastChart';
 import { Heading } from '../standard/Heading';
 import { LineChart } from '../standard/LineChart';
 import { LoanOffer } from '../standard/LoanOffer';
+import { LoanSummary } from '../standard/LoanSummary';
+import { LiabilitySummary } from '../standard/LiabilitySummary';
 import { PlanTable } from '../standard/PlanTable';
 import { ProgressBar } from '../standard/ProgressBar';
 import { ScenarioComparison } from '../standard/ScenarioComparison';
@@ -60,6 +62,8 @@ const vozColorCatalog: CatalogRegistry = {
   Badge,
   ProgressBar,
   LoanOffer,
+  LoanSummary,
+  LiabilitySummary,
   ScenarioComparison,
   PlanTable,
   ForecastChart,

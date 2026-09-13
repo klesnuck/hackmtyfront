@@ -255,3 +255,13 @@ export function getLoanDetail(loanId: string, userId: string): Promise<LoanDetai
   );
 }
 
+/** GET /api/liabilities/{liability_id}/ui — personalized per-liability A2UI page. */
+export function getLiabilityDetail(
+  liabilityId: string,
+  userId: string,
+): Promise<LoanDetailResponse> {
+  return apiRequest<LoanDetailResponse>(
+    `/api/liabilities/${encodeURIComponent(liabilityId)}/ui?user_id=${encodeURIComponent(userId)}`,
+  );
+}
+

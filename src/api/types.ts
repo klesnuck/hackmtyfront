@@ -323,7 +323,8 @@ export type LoansListResponse = {
 
 export type LoanDetailResponse = {
   status: 'ok' | 'error';
-  loan_id: string;
+  entity: 'loan' | 'liability' | null;
+  entity_id: string | null;
   source: string | null;
   catalog_id: string | null;
   surface_id: string | null;
