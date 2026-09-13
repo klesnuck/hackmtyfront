@@ -57,7 +57,12 @@ export function getSurface(surfaceId: string): Promise<UiResponse> {
 }
 
 // REQ-API-07 — returns a playable URL, not JSON; see features/voice.
+// `assetId` may be a bare id ("aud_xxx") or an already-prefixed `audio_ref`
+// path ("/api/audio/aud_xxx") as returned by /api/message, /api/loans/*, etc. —
+// callers pass whichever the backend gave them, so both must resolve without
+// duplicating the "/api/audio/" segment.
 export function getAudioAssetUrl(assetId: string, baseUrl: string): string {
+  if (assetId.startsWith('/api/audio/')) return `${baseUrl}${assetId}`;
   return `${baseUrl}/api/audio/${encodeURIComponent(assetId)}`;
 }
 
