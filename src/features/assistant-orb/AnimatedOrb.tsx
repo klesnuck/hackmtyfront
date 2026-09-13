@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
 import { Platform, StyleSheet, View } from 'react-native';
-import { LoadSkiaWeb } from '@shopify/react-native-skia/lib/module/web';
 import Animated, {
   Easing,
   cancelAnimation,
@@ -10,10 +9,11 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import Svg, { Circle, Defs, RadialGradient, Stop } from 'react-native-svg';
+import { loadSkiaWeb } from './skiaWeb';
 
 // Keep in sync with OrbCanvas.tsx's own ORB_SIZE — that file can't be
 // statically imported here (it imports `@shopify/react-native-skia`, which
-// must stay unevaluated until `LoadSkiaWeb()` resolves on web, see below),
+// must stay unevaluated until `loadSkiaWeb()` resolves on web, see below),
 // so the value is duplicated rather than shared.
 const ORB_SIZE = 200;
 const HALO_SIZE = ORB_SIZE * 1.6;
@@ -25,11 +25,16 @@ type OrbCanvasComponent = React.ComponentType<{ isListening?: boolean }>;
  * Platform entry point for the assistant orb. Delegates to `OrbCanvas`
  * (the actual Skia particle renderer) but only ever `require()`s that
  * module — which statically imports `@shopify/react-native-skia` — after
- * `LoadSkiaWeb()` resolves on web. Importing `OrbCanvas` eagerly at this
+ * `loadSkiaWeb()` resolves on web. Importing `OrbCanvas` eagerly at this
  * file's top level would evaluate Skia's web CanvasKit binding before the
  * WASM binary is loaded ("CanvasKit is not defined"), since that binding is
- * captured once, at require-time. Native has no such bootstrap step, so it
- * loads `OrbCanvas` immediately.
+ * captured once, at require-time.
+ *
+ * `loadSkiaWeb` is itself platform-split (`skiaWeb.web.ts` re-exports Skia's
+ * `LoadSkiaWeb`, `skiaWeb.native.ts` is a no-op). That keeps the web-only
+ * `canvaskit-wasm` import — whose Emscripten glue contains a Node-only
+ * `require("fs")` — out of the iOS/Android module graph, so native imports
+ * here don't crash Metro resolution and simply load `OrbCanvas` immediately.
  *
  * Also renders the soft ambient halo behind the particle sphere — a
  * `react-native-svg` `RadialGradient` (a true radial falloff, unlike
@@ -51,7 +56,7 @@ export function AnimatedOrb({ isListening = false }: { isListening?: boolean }) 
 
     async function load() {
       if (Platform.OS === 'web') {
-        await LoadSkiaWeb({ locateFile: (file: string) => '/' + file });
+        await loadSkiaWeb({ locateFile: (file: string) => '/' + file });
       }
       // eslint-disable-next-line @typescript-eslint/no-require-imports
       const { OrbCanvas: Component } = require('./OrbCanvas');
