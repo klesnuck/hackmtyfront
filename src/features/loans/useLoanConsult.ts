@@ -87,10 +87,18 @@ export function useLoanConsult() {
     [],
   );
 
-  /** Send a user turn — calls POST /api/loans/consult. */
+  /**
+   * Send a user turn — calls POST /api/loans/consult.
+   *
+   * `sessionIdOverride` lets a caller that just awaited `greet()` in the same
+   * call pass the fresh id straight through: `state.sessionId` here is a
+   * stale closure until the greet's setState re-renders this hook, so relying
+   * on it alone drops the very first message of a session.
+   */
   const send = useCallback(
-    async (text: string): Promise<LoansConsultPayload> => {
-      if (!state.sessionId) {
+    async (text: string, sessionIdOverride?: string): Promise<LoansConsultPayload> => {
+      const sessionId = sessionIdOverride ?? state.sessionId;
+      if (!sessionId) {
         throw new Error('useLoanConsult.send: no session — call greet() first');
       }
 
@@ -98,7 +106,7 @@ export function useLoanConsult() {
 
       try {
         const payload = await loansConsult({
-          session_id: state.sessionId,
+          session_id: sessionId,
           text,
           language: 'es-MX',
           loan_request_id: state.loanRequestId,

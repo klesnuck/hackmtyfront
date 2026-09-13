@@ -155,7 +155,7 @@ export default function AsistenteScreen() {
           currentSessionId = greetPayload.session_id;
         }
 
-        const consultPayload = await loanConsult.send(text);
+        const consultPayload = await loanConsult.send(text, currentSessionId);
 
         if (consultPayload.terminal_response) {
           applyMessages(consultPayload.terminal_response.a2ui);
@@ -220,24 +220,25 @@ export default function AsistenteScreen() {
 
     if (intent === 'prestamo-nuevo') {
       setMode('loans');
-      if (userId) {
-        setIsSending(true);
-        void loanConsult
-          .greet(userId)
-          .then((res) => {
-            if (res.response_text) {
-              appendTurn({ id: `system-${Date.now()}`, role: 'system', text: res.response_text });
-            }
-          })
-          .catch(() => {
-            appendTurn({
-              id: `system-${Date.now()}`,
-              role: 'system',
-              text: 'No pude iniciar la consulta de préstamos.',
-            });
-          })
-          .finally(() => setIsSending(false));
-      }
+      setIsSending(true);
+      // Greet immediately on entry — don't gate on `userId` being hydrated
+      // yet (session.store loads it async and starts at null), matching the
+      // 'u_ana' fallback submitText already uses for the same call.
+      void loanConsult
+        .greet(userId ?? 'u_ana')
+        .then((res) => {
+          if (res.response_text) {
+            appendTurn({ id: `system-${Date.now()}`, role: 'system', text: res.response_text });
+          }
+        })
+        .catch(() => {
+          appendTurn({
+            id: `system-${Date.now()}`,
+            role: 'system',
+            text: 'No pude iniciar la consulta de préstamos.',
+          });
+        })
+        .finally(() => setIsSending(false));
       return;
     }
 
