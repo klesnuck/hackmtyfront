@@ -156,20 +156,32 @@ export default function AsistenteScreen() {
       });
 
       if (res.status === 'ok') {
-        const loanId = res.loan?.id;
         await Promise.all([
           queryClient.invalidateQueries({ queryKey: ['liabilities', userId] }),
           queryClient.invalidateQueries({ queryKey: ['accounts', userId] }),
+          queryClient.invalidateQueries({ queryKey: ['loans', userId] }),
         ]);
         setPendingLoanRequest(null);
-        // Clear the consult conversation and panel so returning to Asistente
-        // shows the idle greeting, then open the new loan's own page.
+
+        // Reset the assistant conversation so returning to the chat starts
+        // fresh: clear the consult/panel state, drop cached surfaces, and mint a
+        // new backend session (the agent's history is keyed by session_id).
         loanConsult.reset();
         setPanelState({ kind: 'idle' });
         setMode('la-mesa');
-        if (loanId) {
-          router.push({ pathname: '/loan/[id]', params: { id: loanId } });
+        setNotice(null);
+        greetedForSessionRef.current = null;
+        hasSentInitialIntent.current = false;
+        useA2UIStore.getState().reset();
+        try {
+          const fresh = await createSession(userId);
+          await setSession(fresh, accessibilityMode);
+        } catch (error) {
+          if (__DEV__) console.warn('[asistente] session reset failed:', error);
         }
+
+        // Go to the Préstamos list (all loans), not the individual loan page.
+        router.navigate('/prestamos');
       } else if (__DEV__) {
         console.warn('[asistente] loan creation failed:', res.issues?.[0]);
       }

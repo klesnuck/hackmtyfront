@@ -14,6 +14,8 @@ type A2UIStore = {
   /** Applies an a2ui[] message array in order. Safe to call with messages for any surface. */
   applyMessages: (messages: A2UIMessage[]) => void;
   removeSurface: (surfaceId: string) => void;
+  /** Drops every surface (used when the assistant conversation is reset). */
+  reset: () => void;
 };
 
 /**
@@ -80,6 +82,8 @@ export const useA2UIStore = create<A2UIStore>((set) => ({
       delete surfaces[surfaceId];
       return { surfaces };
     }),
+
+  reset: () => set({ surfaces: {} }),
 }));
 
 export function useSurface(surfaceId: string | undefined): SurfaceState | undefined {

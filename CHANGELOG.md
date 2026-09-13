@@ -366,3 +366,13 @@
 - rationale: The greeting should address the actual user; and creating a loan should land the user on its detail page (the point of the per-loan UI), with the consult/panel cleared so returning shows the idle greeting.
 - impact: `npm run typecheck` clean; `npx @fission-ai/openspec validate --all` 23/23. `npm run lint` still blocked by the pre-existing `unrs-resolver` native-binding failure.
 - follow_ups: Manual: each persona shows its first name; confirming a loan opens `/loan/[id]`; returning to Asistente shows the idle panel.
+
+## [2026-09-13] fix — accepting a loan goes to Préstamos and starts a fresh chat
+- agent: opencode / deepseek-flash
+- requirements: `openspec/changes/personalized-loans-and-list` (updated)
+- invariants: no A2UI wire change
+- files: `app/(tabs)/asistente.tsx`, `src/a2ui/store.ts`, `openspec/changes/personalized-loans-and-list/`
+- decision: Confirming "Confirmar y recibir fondos" previously opened the individual loan page (`/loan/[id]`) and only partially reset state. Now on success it: invalidates `['loans', userId]` too (the Préstamos tab's query) so the new loan shows immediately; resets the assistant conversation (`loanConsult.reset()`, panel → idle, mode → la-mesa, `setNotice(null)`, clears `greetedForSessionRef`/`hasSentInitialIntent`, and `useA2UIStore.reset()` drops cached surfaces); mints a **fresh backend session** (`createSession` + `setSession`) so the agent's history is genuinely new; and navigates to the **Préstamos list** (`router.navigate('/prestamos')`). Added `useA2UIStore.reset()` to clear all surfaces at once.
+- rationale: The product flow ends at the loans list, and the user should get a clean assistant afterwards (no lingering terminal surface and no prior negotiation context), which requires a new session because the ADK history is keyed by `session_id`.
+- impact: `npm run typecheck` clean; `npx @fission-ai/openspec validate --all` 23/23. `npm run lint` still blocked by the pre-existing `unrs-resolver` native-binding failure.
+- follow_ups: Manual: accept a loan → Préstamos shows it; return to Asistente → greeting replays with a fresh conversation; the loan card still opens its detail page.
